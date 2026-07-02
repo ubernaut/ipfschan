@@ -894,7 +894,7 @@ Files touched:
 - `README.md`
 - `docs/index.html`
 - `docs/assets/index-CAFk9gxj.js`
-- `docs/assets/index-CBhQTUzn.js`
+- `docs/assets/index-A60MbL94.js`
 - `plan/plan.md`
 - `plan/tests.md`
 - `plan/log.md`
@@ -913,7 +913,7 @@ Commands run and results:
 - `node --check src/client/main.js`: passed after UI status changes.
 - `npm test`: passed; 5 test files and 20 tests.
 - `npm run build`: passed; Vite still warned about the large Helia/libp2p chunk.
-- `npm run build:pages`: passed; final local Pages asset was `docs/assets/index-CBhQTUzn.js`; Vite still warned about the large Helia/libp2p chunk.
+- `npm run build:pages`: passed; final current Pages asset was `docs/assets/index-A60MbL94.js`; Vite still warned about the large Helia/libp2p chunk.
 - `node --input-type=module <<'NODE' ... prefix static server ... NODE`: started a temporary server for `http://127.0.0.1:8765/ipfschan/`.
 - `curl -sSf http://127.0.0.1:8765/ipfschan/ | rg -n "index-CBhQTUzn|p2p-status"`: confirmed the local Pages-shaped server returned the final Pages asset and app shell.
 - Headless Chrome/CDP two-profile probes:
@@ -921,6 +921,14 @@ Commands run and results:
   - A delayed retry against the same live authoring tab later loaded the board in profile B as `board ready from public IPFS`, proving the public path can work but propagation is slow.
   - A later probe exposed a stale background announce race where the initial empty-board announce overwrote the thread publish as `1/1 CIDs`.
   - Final local probe after publish tokens and abortable public load retries passed: profile A showed `board published; public IPFS announce attempted for 2/2 CIDs`, profile B opened the copied URL from clean storage and showed `board ready from public IPFS`, the thread content rendered, and both profiles made zero `/api` requests.
+- `git commit -m "Enable public IPFS Pages networking"`: created commit `da17dcb`.
+- `git push origin main`: pushed `da17dcb` to `origin/main`.
+- `curl -fsSL 'https://ubernaut.github.io/ipfschan/?deploy=da17dcb'` loop: GitHub Pages served `docs/assets/index-CBhQTUzn.js` on attempt 3.
+- Live GitHub Pages two-profile CDP probe against `https://ubernaut.github.io/ipfschan/`:
+  - profile A created a thread and reported `board published; public IPFS announce attempted for 2/2 CIDs`,
+  - profile B opened the copied URL from clean storage with zero `/api` requests but did not resolve within the then-current 180 second public load window,
+  - a delayed retry against the same copied URL and still-open author tab succeeded with `board ready from public IPFS` and rendered the thread content,
+  - the public load timeout was extended to 360 seconds to cover the live propagation time observed in this probe.
 
 Failures and pivots:
 
@@ -931,5 +939,5 @@ Failures and pivots:
 
 Open questions and caveats:
 
-- Public IPFS propagation is noticeably slower than the old app-owned mirror/signaling path. The current Pages path works without `/api`, but users should expect a delay before a freshly copied board URL resolves in a clean browser.
+- Public IPFS propagation is noticeably slower than the old app-owned mirror/signaling path. The current Pages path works without `/api`, but users should expect up to several minutes before a freshly copied board URL resolves in a clean browser.
 - The authoring tab still needs to remain online long enough for public provider announcement and retrieval. A future durable pinning or availability handoff could improve offline persistence without reintroducing a selectable server-backed board mode.

@@ -52,7 +52,7 @@ GitHub Pages static build:
 npm run build:pages
 ```
 
-This writes the serverless Pages build to `docs/` with a `/ipfschan/` base path. The Pages build runs the same P2P-first client and starts Helia's public browser IPFS networking instead of calling the Node WebRTC signaling or mirror endpoints. Fresh browser sharing depends on whether the browser-authored CIDs become reachable through the public IPFS network while the authoring tab remains online; public provider propagation can take a minute or more, so clean readers retry public loads before giving up.
+This writes the serverless Pages build to `docs/` with a `/ipfschan/` base path. The Pages build runs the same P2P-first client and starts Helia's public browser IPFS networking instead of calling the Node WebRTC signaling or mirror endpoints. Fresh browser sharing depends on whether the browser-authored CIDs become reachable through the public IPFS network while the authoring tab remains online; public provider propagation can take several minutes, so clean readers retry public loads before giving up.
 
 Container build:
 
