@@ -155,6 +155,7 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Reply posting now merges the new reply CID into the current URL, so copying the active thread link carries the reply content dependency as well as the index and thread root.
 - Node-hosted live peer sessions now advertise thread-root CIDs in addition to thread-index CIDs.
 - The WebRTC data-channel protocol can request verified thread post records from a live peer; imported peer batches are CID-checked and rolled back if a record is invalid or belongs to another thread.
+- Node-hosted browser Helia now starts local-only; the app-owned WebRTC helper and mirror path handle live transfer there, while only the GitHub Pages build starts Helia's public browser network.
 
 ## Next Useful Work
 

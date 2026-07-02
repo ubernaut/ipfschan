@@ -196,10 +196,7 @@ export class DecentralizedBoard {
 
     const blockstore = new IDBBlockstore('ipfschan-browser-blocks')
     await blockstore.open()
-    const heliaOptions = this.serverless
-      ? { blockstore, start: false }
-      : { blockstore }
-    this.helia = await createHelia(heliaOptions)
+    this.helia = await createHelia({ blockstore, start: false })
     this.dag = dagJson(this.helia)
     this.files = unixfs(this.helia)
     if (this.serverless) {
