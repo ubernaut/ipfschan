@@ -929,6 +929,19 @@ Commands run and results:
   - profile B opened the copied URL from clean storage with zero `/api` requests but did not resolve within the then-current 180 second public load window,
   - a delayed retry against the same copied URL and still-open author tab succeeded with `board ready from public IPFS` and rendered the thread content,
   - the public load timeout was extended to 360 seconds to cover the live propagation time observed in this probe.
+- `git commit -m "Extend public IPFS load window"`: created commit `81f1e5d`.
+- `git push origin main`: pushed `81f1e5d` to `origin/main`.
+- `curl -fsSL 'https://ubernaut.github.io/ipfschan/?deploy=81f1e5d'` loop: GitHub Pages served the updated `docs/assets/index-A60MbL94.js` bundle on attempt 4.
+- Final live GitHub Pages two-profile CDP probe against `https://ubernaut.github.io/ipfschan/?probe=live-final-a-81f1e5d`:
+  - profile A created `final live public relay probe 1782973275603`,
+  - profile A published board CID `baguqeeraaxpspbtbbdaeanzsznabzrsmjauuseqbl3cbkuznwbrhpeauf4ma` and thread CID `baguqeeraxg4bgyjxblgn2onbmbbqtop2pv2axjapuyrv7rk2qyrms4h2wjaa`,
+  - profile A reported `board published; public IPFS announce attempted for 2/2 CIDs: baguqeeraa...auf4ma`,
+  - profile B opened the copied board URL from clean storage, rendered the thread content, and reported `board ready from public IPFS: baguqeeraa...auf4ma`,
+  - profile A and profile B made zero app `/api` requests during the probe,
+  - profile B loaded the final `index-A60MbL94.js` Pages bundle,
+  - the temporary Chrome CDP sessions were stopped after the passing probe.
+- `git status --short --branch`: showed `## main...origin/main` before this final log-only update.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py status --repo ipfschan --check-staleness`: reported the ICC index was stale at `105d3cb` versus current `81f1e5d`; no source-context lookup depended on stale ICC data during this final log-only update.
 
 Failures and pivots:
 
