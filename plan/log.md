@@ -1,0 +1,645 @@
+# Implementation Log
+
+## 2026-06-28 14:52:08 AKDT
+
+Prompt: "take a look around and see if you can carry this project forward a meaningful ammount"
+
+Actions attempted:
+
+- Read the ICC skill instructions and used ICC for repo orientation.
+- Searched memory for `ipfschan`; no relevant prior memory entries were found.
+- Checked repository state with `git status --short`; it failed because `/home/cos/projects/ipfschan` is not a git repository.
+- Listed files with `rg --files`; found legacy `imp-plan.md` and `imp-log.md`, but no `plan/` directory.
+- Attempted to read `plan/plan.md`, `plan/log.md`, and `plan/tests.md`; all were missing.
+- Read `imp-plan.md`, `imp-log.md`, `README.md`, `package.json`, server modules, client modules, and existing tests.
+- Confirmed runtime versions: `node -v` returned `v24.17.0`; `npm -v` returned `11.13.0`.
+- Registered and indexed the repo with ICC as `ipfschan`, then built ICC memory.
+- Ran baseline `npm test`; result was 1 test file passed, 2 tests passed.
+- Implemented thread pre-order traversal in `src/server/repository.js` with `depth` and `replyCount` metadata.
+- Implemented recursive `importPost` ancestry loading for known reply CIDs when ancestor blocks are available locally.
+- Fixed tagged thread summaries to expose root attachments as `attachment` and `rootAttachment`.
+- Updated `src/client/main.js` to render nested reply depth and parent CID hints.
+- Updated `src/client/styles.css` toward a retro terminal style and added stable nested reply indentation.
+- Reworked `src/server/__tests__/repository.test.js` to use isolated temp repositories and added tests for tree order, recursive imports, and attachment summaries.
+- First expanded test run failed in the import test with `CBOR decode error: data to decode must be a Uint8Array`.
+- Investigated with a Node one-liner and found `blockstore-fs` returned an async byte iterable from `get()`, while `@helia/dag-json` expected a `Uint8Array`.
+- Added `ByteBlockstore` in `src/server/ipfs.js` to collect streamed blockstore bytes before Helia DAG-JSON decodes them.
+- Verified DAG-JSON readback with a Node one-liner after the adapter: raw blockstore reads returned `Uint8Array`, and `dag.get()` returned the original object.
+- Verified UnixFS addBytes/cat readback with a Node one-liner after the adapter.
+- Added `src/server/__tests__/ipfs.test.js` to lock DAG-JSON and UnixFS round trips.
+- Ran `npm test`; result was 2 test files passed, 6 tests passed.
+- Created `plan/plan.md`, `plan/tests.md`, and this log to make `plan/` the current planning authority.
+- Ran final `npm test`; result was 2 test files passed, 6 tests passed.
+- Ran `npm run build`; result passed with Vite output under ignored `dist/`.
+- Refreshed ICC after code and documentation changes; index now covers 28 files and memory contains 106 chunks.
+
+Files touched:
+
+- `src/server/ipfs.js`
+- `src/server/repository.js`
+- `src/server/__tests__/ipfs.test.js`
+- `src/server/__tests__/repository.test.js`
+- `src/client/main.js`
+- `src/client/styles.css`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+- `README.md`
+
+Commands run and results:
+
+- `rg -n "ipfschan|ipfs chan|ipfs-channel" /home/cos/.codex/memories/MEMORY.md`: no matches.
+- `git status --short`: failed, not a git repository.
+- `rg --files`: listed project files.
+- `sed -n '1,240p' plan/plan.md`: failed, file missing.
+- `sed -n '1,260p' plan/log.md`: failed, file missing.
+- `sed -n '1,240p' plan/tests.md`: failed, file missing.
+- `sed -n '1,260p' imp-plan.md`: reviewed legacy plan.
+- `sed -n '1,320p' imp-log.md`: reviewed legacy log.
+- `node -v`: `v24.17.0`.
+- `npm -v`: `11.13.0`.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py register --name ipfschan --path /home/cos/projects/ipfschan --skip-dir .git --skip-dir node_modules --skip-dir dist --skip-dir build --skip-dir coverage --skip-dir playwright-report`: registered successfully.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: indexed 24 files.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: built memory with 101 chunks.
+- `npm test`: baseline passed with 2 tests.
+- `npm test`: expanded suite initially failed with `CBOR decode error: data to decode must be a Uint8Array`.
+- `node --input-type=module -e "... dag.add/dag.get debug ..."`: reproduced blockstore byte-shape mismatch, then later verified the adapter fix.
+- `node --input-type=module -e "... files.addBytes/files.cat debug ..."`: verified UnixFS byte round trip.
+- `npm test`: passed with 2 files and 6 tests.
+- `npm run build`: passed; Vite built `dist/index.html`, `dist/assets/index-D4l3Baus.css`, and `dist/assets/index-BIhsucQT.js`.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: refreshed successfully after changes, 28 files indexed.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed successfully after changes, 106 chunks.
+
+Failures and open questions:
+
+- There is no `.git` directory under `/home/cos/projects/ipfschan`, so the requested periodic local commit cannot be made from this checkout.
+- The legacy `imp-plan.md` and `imp-log.md` remain for history, but current planning authority is now under `plan/`.
+- Recursive import can only load ancestors whose DAG blocks are already reachable by the local Helia node. Networked discovery, trust policy, and pinning are still future work.
+
+## 2026-06-28 15:03:35 AKDT
+
+Prompt: "keep going until you have a real functional system we can deploy somewehre."
+
+Actions attempted:
+
+- Re-read `plan/plan.md`, `plan/log.md`, and `plan/tests.md` before starting.
+- Re-read the ICC skill instructions and checked ICC staleness for `ipfschan`; the index was current.
+- Confirmed runtime versions remained on Node 24: `node -v` returned `v24.17.0`, `npm -v` returned `11.13.0`.
+- Ran `npm outdated --json` and found stale direct dependencies across Express, Helia/libp2p, Vite, Vitest, Supertest, and related packages.
+- Upgraded direct dependencies to current supported releases with `npm install express@latest cors@latest multer@latest helia@latest @helia/unixfs@latest @helia/dag-json@latest libp2p@latest @libp2p/tcp@latest @libp2p/websockets@latest @libp2p/noise@latest @chainsafe/libp2p-yamux@latest blockstore-fs@latest concurrently@latest vite@latest vitest@latest supertest@latest`.
+- Ran `npm test`; the upgrade initially failed because the Helia 5 `ByteBlockstore` adapter returned `Uint8Array` values while Helia 6 expected async iterable blockstore reads.
+- Removed `ByteBlockstore` from `src/server/ipfs.js` and returned to native `FsBlockstore` for Helia 6.
+- Ran `npm test`; result passed with 2 files and 6 tests after the Helia 6 blockstore fix.
+- Ran `npm audit fix`; result changed 1 package and reported zero vulnerabilities.
+- Added environment-driven server config for `HOST`, `PORT`, `DATA_DIR`, `IPFS_OFFLINE`, `MAX_BODY_BYTES`, and `MAX_FILE_BYTES`.
+- Added `PostRepository.getStats()` and `/api/health`.
+- Added upload error normalization and reusable byte-source streaming helpers in the API router.
+- Updated Express static fallback to work cleanly with Express 5.
+- Added graceful SIGTERM/SIGINT handling in `src/server/index.js`.
+- Added `src/server/__tests__/api.test.js` with Supertest coverage for health, thread creation, replies, tags, thread tree depth, file streaming, reset, and import after index reset.
+- Added `scripts/smoke.js`, `npm run smoke`, `npm run verify`, and Node engine metadata.
+- Added `Dockerfile`, `.dockerignore`, and `compose.yaml`.
+- Added a client-side CID import form plus status line in `src/client/index.html`, `src/client/main.js`, and `src/client/styles.css`.
+- Ran `npm test`; result passed with 3 files and 9 tests.
+- Ran `npm install --package-lock-only`; result was up to date with zero vulnerabilities.
+- Ran `npm run build`; result passed with Vite 8.1.0 and produced `dist/index.html`, `dist/assets/index-CnpYuXRU.css`, and `dist/assets/index-DL9-RI_L.js`.
+- Ran `npm run smoke`; result passed and reported `Smoke passed at http://127.0.0.1:45673`.
+- Ran `npm run verify`; result passed: tests, build, and smoke all completed successfully.
+- Ran `docker --version` and `docker compose version`; Docker 29.6.1 and Docker Compose v5.2.0 were available.
+- Ran `npm audit --json`; result reported zero vulnerabilities.
+- Ran `docker build -t ipfschan:local .`; result passed. Docker emitted an npm allow-scripts warning for `node-datachannel@0.32.3`, but the image build and audit completed successfully.
+- Started a disposable container from `ipfschan:local` with a random local port mapping.
+- Checked Docker logs; the app bound to `0.0.0.0:4000` and used `Data directory: /data`.
+- Hit `/api/health` through the mapped host port; result was HTTP 200 with `{"ok":true,"status":"ready","offline":true,"storage":"local-ipfs","postCount":0,"threadCount":0,"tagCount":0}`.
+- Fetched `/` through the mapped host port; result was HTTP 200 and the app shell included `ipfschan`.
+- Checked Docker health status; result was `healthy`.
+- Stopped the disposable container and verified no containers from `ipfschan:local` remained running.
+- Ran `docker compose config`; result rendered a valid service with port `4000`, `/data`, and named volume `ipfschan-data`.
+- Ran `npm outdated --json`; result was `{}`, meaning direct dependencies were current.
+- Added `plan/deploy.md` and updated README, plan, tests, and log documentation.
+- Ran final `npm run verify`; result passed: 3 test files, 9 tests, Vite production build, and smoke startup/shutdown.
+- Refreshed ICC after the deployment slice; index now covers 33 files and memory contains 118 chunks.
+- Checked for leftover `ipfschan:local` containers; none were running.
+- Checked for leftover app/dev processes matching this repo; no ipfschan server, Vite, or smoke process was running. The only Vite matches belonged to `/home/cos/projects/ulg` and were left alone.
+
+Files touched:
+
+- `package.json`
+- `package-lock.json`
+- `Dockerfile`
+- `.dockerignore`
+- `compose.yaml`
+- `scripts/smoke.js`
+- `src/server/config.js`
+- `src/server/ipfs.js`
+- `src/server/repository.js`
+- `src/server/routes.js`
+- `src/server/app.js`
+- `src/server/index.js`
+- `src/server/__tests__/api.test.js`
+- `src/client/index.html`
+- `src/client/main.js`
+- `src/client/styles.css`
+- `README.md`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/deploy.md`
+- `plan/log.md`
+
+Failures and pivots:
+
+- The direct dependency upgrade broke DAG-JSON/IPFS reads until the old Helia 5 blockstore adapter was removed. Helia 6 expects async iterable blockstore reads, and native `FsBlockstore` now satisfies the app's DAG-JSON and UnixFS tests.
+- Docker build produced an npm allow-scripts warning for transitive `node-datachannel@0.32.3`; no vulnerability remained, and runtime validation passed.
+- This checkout still has no `.git` directory, so no local commit could be made.
+
+Open questions:
+
+- A named hosting target has not been selected yet. The app is now container-ready for any host that can run a Node 24 container with persistent `/data`.
+- Public writable deployment still needs authentication, moderation/rate limiting, and backup policy.
+- Networked IPFS mode (`IPFS_OFFLINE=false`) needs target-environment validation before relying on remote peer discovery.
+
+## 2026-06-30 14:43:53 AKDT
+
+Prompt: "can you start this up so I can test it from the vpn" followed by "it might need https right?"
+
+Actions attempted:
+
+- Re-read `plan/plan.md`, `plan/log.md`, `plan/deploy.md`, and `plan/tests.md` before starting.
+- Confirmed runtime versions: `node -v` returned `v24.17.0`; `npm -v` returned `11.13.0`.
+- Checked network interfaces and found the Tailscale/VPN IPv4 address `100.86.83.35` on `tailscale0`; LAN address was `192.168.1.42`.
+- Checked candidate ports with `ss -ltnp`; port `4443` was free.
+- Added direct HTTPS support to `src/server/index.js` using `HTTPS=true`, `HTTPS_KEY_FILE`, and `HTTPS_CERT_FILE`.
+- Added HTTPS env fields to `src/server/config.js`.
+- Added `.local` to `.gitignore` so local certs/logs are not tracked.
+- Updated README and `plan/deploy.md` with HTTPS runtime variables.
+- Generated a 30-day self-signed cert under `.local/certs/` with SANs for `localhost`, `ipfschan.local`, `127.0.0.1`, `192.168.1.42`, and `100.86.83.35`.
+- Ran `npm test`; result passed with 3 files and 9 tests.
+- Ran `npm run build`; result passed with Vite 8.1.0 and produced the production `dist/` assets.
+- Started a persistent tmux session named `ipfschan-https` with `NODE_ENV=production HOST=0.0.0.0 PORT=4443 HTTPS=true`.
+- Verified server logs showed `API and web server running on https://0.0.0.0:4443` and data directory `/home/cos/projects/ipfschan/data`.
+- Verified `ss -ltnp` showed the server listening on `0.0.0.0:4443`.
+- Verified `https://127.0.0.1:4443/api/health` with `curl -k`; result was HTTP success and JSON health with `postCount:3`, `threadCount:2`, `tagCount:2`.
+- Verified `https://100.86.83.35:4443/api/health` with `curl -k`; result matched the local health response.
+- Verified the app shell over `https://100.86.83.35:4443/`; result included the `ipfschan` title/header and built JS/CSS assets.
+- Verified the built JS asset over `https://100.86.83.35:4443/assets/index-DL9-RI_L.js`.
+
+Files touched:
+
+- `src/server/config.js`
+- `src/server/index.js`
+- `.gitignore`
+- `README.md`
+- `plan/deploy.md`
+- `plan/log.md`
+
+Current running service:
+
+- tmux session: `ipfschan-https`
+- URL for VPN testing: `https://100.86.83.35:4443/`
+- Health URL: `https://100.86.83.35:4443/api/health`
+- Log file: `.local/logs/ipfschan-https.log`
+- Stop command: `tmux kill-session -t ipfschan-https`
+
+Notes and caveats:
+
+- The cert is self-signed, so browsers will show a certificate warning unless the local certificate is trusted.
+- The service is running in offline IPFS mode, using the existing local `data/` directory.
+
+## 2026-06-30 14:51:42 AKDT
+
+Prompt: "this is great. can you add the thread to the url so when you reply or open a thread it stays in the thread and you can link them to other people?"
+
+Actions attempted:
+
+- Re-read the ICC skill instructions and checked ICC staleness for `ipfschan`; index was current.
+- Re-read `plan/plan.md`, `plan/log.md`, and `plan/tests.md` before editing.
+- Inspected `src/client/main.js`, `src/client/index.html`, and `src/client/styles.css`.
+- Added URL route helpers in `src/client/main.js` using `URLSearchParams`, `history.pushState`, `history.replaceState`, and `popstate`.
+- Added `?tag=<tag>&thread=<rootCid>` route state for tag and thread views.
+- Updated thread opening so selecting a thread pushes a shareable URL.
+- Updated thread creation/import so the app navigates to the new/imported thread URL.
+- Updated reply submission so it refreshes tags/thread lists without clearing or leaving the active thread.
+- Added active tag rendering.
+- Added a per-thread `Link` anchor in thread cards and an active-thread `Copy Link` button.
+- Updated `src/client/index.html` with the copy-link button.
+- Updated `src/client/styles.css` for the section heading, active tags, and thread links.
+- Ran `node --check src/client/main.js`; result passed.
+- Ran `npm test`; result passed with 3 files and 9 tests.
+- Ran `npm run build`; result passed and produced `dist/assets/index-BoEanGBc.js` plus `dist/assets/index-Cu76dA1m.css`.
+- Queried live tags over `https://100.86.83.35:4443/api/tags`; result included tags `aasdf`, `sage`, and `poastrat`.
+- Queried live threads for tag `aasdf`; result returned root CID `baguqeeravzp7lvrl4ah6czb6hrxdauhn66hz75q4mxikcv6ajuxzj3e5asfq`.
+- Fetched the live app shell over `https://100.86.83.35:4443/`; result referenced the new built JS/CSS assets and included `copy-thread-link`.
+- Verified the built JS asset over the live HTTPS server included the new URL-routing code.
+- Ran headless Google Chrome with `--ignore-certificate-errors` and `--virtual-time-budget=5000` against `https://100.86.83.35:4443/?tag=aasdf&thread=baguqeeravzp7lvrl4ah6czb6hrxdauhn66hz75q4mxikcv6ajuxzj3e5asfq`; result rendered the active `aasdf` tag, the thread card, the share link, the visible `Copy Link` button, and both nested posts.
+
+Files touched:
+
+- `src/client/index.html`
+- `src/client/main.js`
+- `src/client/styles.css`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Current shareable test URL:
+
+- `https://100.86.83.35:4443/?tag=aasdf&thread=baguqeeravzp7lvrl4ah6czb6hrxdauhn66hz75q4mxikcv6ajuxzj3e5asfq`
+
+Notes and caveats:
+
+- The link is shareable to users who can reach this instance and accept/trust the current self-signed certificate.
+- Automated client URL-routing tests are still a coverage gap; the behavior was verified with headless Chrome against the live HTTPS server.
+
+## 2026-06-30 15:10:16 AKDT
+
+Prompt: "go ahead and see if you can jump straight to level 3."
+
+Actions attempted:
+
+- Re-read the ICC skill instructions and used the current repo plan/log/tests as the working authority.
+- Checked memory for the prior `ipfschan` deployment and runtime notes.
+- Re-read `plan/plan.md`, `plan/log.md`, and `plan/tests.md` before editing.
+- Inspected the client, server repository, README, Vite/Vitest config, and package metadata.
+- Checked ICC staleness for `ipfschan`; artifacts existed and were not stale before the edits.
+- Added a browser board model in `src/client/board-model.js` with board manifest normalization, tag normalization, tag counts, tag-filtered thread summaries, and parent-before-child thread trees.
+- Added `src/client/decentralized-board.js` with browser Helia initialization, DAG-JSON board/post storage, UnixFS attachment storage, IndexedDB block storage, board publishing, board loading, thread creation, replies, and attachment blob URLs.
+- Installed browser IPFS dependencies with `npm install @helia/block-brokers@latest blockstore-idb@latest multiformats@latest`.
+- Found that the latest direct `multiformats@14` plus `blockstore-idb@4` broke the existing Helia 6 UnixFS server test with incompatible CID classes.
+- Re-pinned the browser blockstore dependency to the Helia-compatible line with `npm install blockstore-idb@3.0.2 multiformats@13.4.2`.
+- Added an explicit `await blockstore.open()` call after the first live browser P2P run failed with `Blockstore needs to be opened.`
+- Added a Board Mode panel to `src/client/index.html` with Server/P2P mode buttons, current board CID display, new-board action, copy-board-link action, and load-board-CID form.
+- Reworked `src/client/main.js` so server mode and P2P mode share the existing retro UI while using different storage backends.
+- Added URL state for P2P mode: `mode=p2p`, `board=<boardCid>`, `tag=<tag>`, and `thread=<rootCid>`.
+- Updated P2P thread creation so the browser publishes a new board CID, opens the new thread, and pushes a shareable P2P URL.
+- Updated P2P replies so the browser publishes a new board CID while preserving the same thread root in the URL.
+- Updated attachment rendering so server mode uses `/api/file/<cid>` and P2P mode reads UnixFS bytes from browser Helia into blob URLs.
+- Added P2P panel styles and active mode styling in `src/client/styles.css`.
+- Added `src/client/__tests__/board-model.test.js` and expanded `vitest.config.js` to include client tests.
+- Verified the live HTTPS server at `https://100.86.83.35:4443/` served the rebuilt assets without restarting the tmux session.
+- Ran a Chrome DevTools Protocol browser check against `https://100.86.83.35:4443/?mode=p2p`; after the `blockstore.open()` fix it created an empty browser board CID.
+- Ran a Chrome DevTools Protocol browser check that created a P2P thread. Result URL included `mode=p2p`, `board`, `tag=p2p-smoke`, and `thread`; the thread rendered from browser Helia storage.
+- Ran a Chrome DevTools Protocol browser check that created a P2P thread and reply. Result: the reply changed the board CID from `baguqeeramx4o7h2oi3f5apmvrzzeoifwvr73owwev4kjsnetijza4bo5ezhq` to `baguqeeracae3cldmzkm74z3qcge3oeam2yfgvkmmje37g7txzjli5hsksjva` while preserving thread root `baguqeera632f2n6f2xt3xrl3ffxdrgtkcrvg723jilwgv3xbpbrb26mecdbq`.
+- Updated README, plan, tests, and this log.
+- Refreshed ICC index and memory after code and documentation changes.
+
+Files touched:
+
+- `package.json`
+- `package-lock.json`
+- `vitest.config.js`
+- `src/client/board-model.js`
+- `src/client/decentralized-board.js`
+- `src/client/__tests__/board-model.test.js`
+- `src/client/index.html`
+- `src/client/main.js`
+- `src/client/styles.css`
+- `README.md`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run and results:
+
+- `sed -n '1,220p' /home/cos/.codex/skills/icc/SKILL.md`: reviewed ICC workflow.
+- `rg -n "ipfschan|Helia|browser|p2p|Node 24|verify" /home/cos/.codex/memories/MEMORY.md`: found the prior deployable Node 24/runtime notes.
+- `sed -n '1,240p' plan/plan.md`, `sed -n '1,260p' plan/log.md`, and `sed -n '1,220p' plan/tests.md`: reviewed current plan/log/test strategy.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py status --repo ipfschan --check-staleness`: index was present and not stale.
+- `npm install @helia/block-brokers@latest blockstore-idb@latest multiformats@latest`: added browser IPFS dependencies, but introduced a Helia 6 CID-version mismatch.
+- `node --check src/client/main.js`, `node --check src/client/decentralized-board.js`, and `node --check src/client/board-model.js`: passed.
+- `npm test`: initially failed in `src/server/__tests__/ipfs.test.js` with `InvalidParametersError: Path must be string or CID`.
+- `npm ls multiformats @helia/unixfs @helia/dag-json helia ipfs-unixfs-exporter`: showed Helia 6/UnixFS on `multiformats@13.4.2` while the latest direct browser dependencies pulled in `multiformats@14.0.3`.
+- `npm view blockstore-idb@4.0.1 dependencies --json`, `npm view blockstore-idb@3.0.2 dependencies --json`, and related version checks: confirmed `blockstore-idb@3.0.2` matches `interface-blockstore@6` and `multiformats@13.4.2`.
+- `npm install blockstore-idb@3.0.2 multiformats@13.4.2`: restored Helia-compatible browser blockstore/CID dependencies; audit reported zero vulnerabilities.
+- `node --input-type=module -e "... files.addBytes/files.cat ..."`: reproduced the UnixFS CID mismatch before the re-pin, then passed afterward with output `bafkreif2pall7dybz7vecqka3zo24irdwabwdi4wc55jznaq75q7eaavvu abc`.
+- `npm test`: passed with 4 files and 14 tests.
+- `npm run build`: passed; Vite produced the browser Helia chunks, with a large-chunk warning for the Helia/libp2p bundle.
+- `npm run smoke`: passed on an ephemeral local server.
+- `curl -k -sS https://100.86.83.35:4443/`: confirmed the live HTTPS server served the new Board Mode HTML and latest built assets.
+- Headless Chrome DevTools Protocol probe against `https://100.86.83.35:4443/?mode=p2p`: first failed with `Blockstore needs to be opened`; after adding `blockstore.open()` it reached `board ready` and displayed a current board CID.
+- Headless Chrome DevTools Protocol create-thread probe: passed with URL `https://100.86.83.35:4443/?mode=p2p&board=baguqeerafhoqfotb7pojgl43pfprhzpjmcmzmracrwgldz7rc4wjn6fjgoxq&tag=p2p-smoke&thread=baguqeerakzwdimqull3aqjxbhsckovbvzpqv352gqdcynooljjcvhb2vwwda`.
+- Headless Chrome DevTools Protocol reply probe: passed; the URL stayed on the same thread and updated to board CID `baguqeeracae3cldmzkm74z3qcge3oeam2yfgvkmmje37g7txzjli5hsksjva`.
+- `npm run verify`: passed with 4 Vitest files and 14 tests, production build, and smoke startup/shutdown.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: refreshed successfully with 39 files indexed.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed successfully with 132 chunks.
+- `git status --short`: failed because `/home/cos/projects/ipfschan` is not a git repository.
+
+Failures and pivots:
+
+- Installing the latest `blockstore-idb@4` and direct `multiformats@14` was not compatible with the current Helia 6/UnixFS stack. The fix was to use `blockstore-idb@3.0.2` and `multiformats@13.4.2`.
+- Browser P2P mode initially failed because `IDBBlockstore` must be explicitly opened before Helia uses it. The fix was `await blockstore.open()` in `DecentralizedBoard.init()`.
+- One early CDP probe exited with an `ENOTEMPTY` cleanup warning after successfully reading the browser DOM. Later CDP probes handled cleanup without failing.
+
+Open questions and caveats:
+
+- This is a Level 3 browser-Helia prototype: P2P board discovery is now a board CID in the URL instead of the server's `data/index.json`, and browser-created posts/files are stored through browser Helia.
+- Other users can only load a browser-created board CID when those blocks are reachable from their browser through an active provider, relay/bootstrap path, gateway, or pinning handoff. A durable availability/pinning path is still needed before calling this fully serverless distribution.
+- The checkout still has no `.git` directory, so no periodic local commit could be made.
+
+## 2026-06-30 15:47:08 AKDT
+
+Prompt: "I don't think p2p mode is working"
+
+Actions attempted:
+
+- Re-read the ICC skill instructions and current `plan/plan.md`, `plan/log.md`, and `plan/tests.md` before editing.
+- Searched memory for the prior `ipfschan` deploy/runtime notes and confirmed the repo's expected `npm run verify` gate.
+- Inspected `src/client/decentralized-board.js`, `src/client/main.js`, `src/client/board-model.js`, server routes, server repository code, README, package metadata, and API tests.
+- Reproduced the problem with two separate headless Chrome profiles against `https://100.86.83.35:4443/`.
+- Profile A created a P2P thread and could reload the copied URL from the same browser profile because the blocks were present in IndexedDB.
+- Profile B opened the copied URL with clean IndexedDB/localStorage and stayed on `loading board...`; browser logs showed failed libp2p direct WebSocket attempts. The fresh browser could not retrieve blocks that only existed in profile A.
+- Added shared P2P snapshot helpers in `src/shared/p2p-snapshot.js` for board type validation and conversion between browser post records and exact DAG payloads.
+- Added `PostRepository.mirrorP2PBoard()` to verify and store browser-authored board, post, and attachment CIDs in the server Helia node without adding them to the normal server thread index.
+- Added `PostRepository.getP2PBoardSnapshot()` to rehydrate a board manifest and its post records by board CID.
+- Added API routes:
+  - `POST /api/p2p/mirror`
+  - `GET /api/p2p/board/:boardCid`
+  - `GET /api/p2p/file/:cidStr`
+- Refactored file streaming so normal `/api/file/:cidStr` and mirrored `/api/p2p/file/:cidStr` can use the same UnixFS/blockstore fallback path.
+- Updated `DecentralizedBoard.publish()` so browser-authored boards are mirrored after each board publish.
+- Updated P2P board loading so a fresh browser tries the availability mirror before waiting on direct Helia retrieval, and falls back to the mirror if local IndexedDB is stale or missing.
+- Updated P2P attachment rendering so it uses browser Helia bytes when available and falls back to `/api/p2p/file/<cid>` when the local browser does not have the file block.
+- Updated P2P status text so the UI reports `board published and mirrored` and `board ready from availability mirror`.
+- Added an API regression test that mirrors a browser-like P2P board snapshot with an attachment, fetches the board by CID, and streams the mirrored file bytes.
+- Rebuilt the client and restarted the live `ipfschan-https` tmux server so the new API routes were available.
+- Re-ran the failing two-profile browser repro. Profile B now loaded the copied URL and displayed `board ready from availability mirror` plus the thread content.
+- Verified mirrored attachment availability by creating a browser P2P thread with a text attachment and confirming `/api/p2p/file/bafkreigqqizpplecy7re5htzx5bs7doyzhr2wt3lmtfhpbu3jmi37w32iy?mime=text/plain` returned `hello from mirrored browser attachment`.
+- Updated README, plan, tests, and this log.
+
+Files touched:
+
+- `src/shared/p2p-snapshot.js`
+- `src/client/board-model.js`
+- `src/client/decentralized-board.js`
+- `src/client/main.js`
+- `src/server/repository.js`
+- `src/server/routes.js`
+- `src/server/__tests__/api.test.js`
+- `README.md`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-06-30 15:47:08 AKDT` for this prompt entry.
+- Two-profile Chrome repro before the fix: profile A same-profile reload rendered the P2P thread, while profile B stayed on `loading board...` with empty tags/threads/posts.
+- `node --check src/server/repository.js && node --check src/server/routes.js && node --check src/client/decentralized-board.js && node --check src/client/main.js && node --check src/shared/p2p-snapshot.js`: passed before tests.
+- `npm test`: passed with 4 files and 15 tests after adding the P2P mirror API test.
+- `npm run build`: passed and produced `dist/assets/index-0Jhy2wkA.js`; Vite still warns that the Helia/libp2p chunk is larger than 500 kB.
+- `tmux respawn-pane -t ipfschan-https:0 -k 'cd /home/cos/projects/ipfschan && NODE_ENV=production HOST=0.0.0.0 PORT=4443 HTTPS=true HTTPS_KEY_FILE=.local/certs/ipfschan.key HTTPS_CERT_FILE=.local/certs/ipfschan.crt npm start >> .local/logs/ipfschan-https.log 2>&1'`: restarted the live HTTPS server to pick up new server routes.
+- `curl -k -sS https://100.86.83.35:4443/api/health`: returned ready health JSON after restart.
+- `curl -k -sS https://100.86.83.35:4443/ | rg -n 'index-0Jhy2wkA|p2p-board|Board Mode'`: confirmed the live server served the rebuilt client.
+- Two-profile Chrome repro after the fix: profile A created `https://100.86.83.35:4443/?mode=p2p&board=baguqeeraoyvx2657hp52zazeqqyruvrwutwohrnoxremljd6klz3wt4jxtta&tag=cross-profile-fixed&thread=baguqeeray23vwxhqrhfjgfa7b7inaru7icfgpw7yxzvzsyvu4tlmza7lb3fq`; profile B loaded it from a clean profile and rendered the thread with `board ready from availability mirror`.
+- `curl -k -sS 'https://100.86.83.35:4443/api/p2p/file/bafkreigqqizpplecy7re5htzx5bs7doyzhr2wt3lmtfhpbu3jmi37w32iy?mime=text/plain'`: returned `hello from mirrored browser attachment`.
+- `npm run verify`: passed with 4 Vitest files and 15 tests, production build, and smoke startup/shutdown.
+- Final live checks confirmed `ipfschan-https` is running, `https://100.86.83.35:4443/api/health` is ready, and only the intended server process is listening on port 4443.
+- `curl -k -sS 'https://100.86.83.35:4443/api/p2p/board/baguqeeraoyvx2657hp52zazeqqyruvrwutwohrnoxremljd6klz3wt4jxtta'`: returned HTTP 200 and the mirrored thread title/body `cross profile fixed check / created in profile A and mirrored`.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: refreshed successfully with 47 files indexed.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed successfully with 142 chunks.
+
+Failures and pivots:
+
+- The original browser-only Level 3 path was not actually shareable to fresh browsers. It only proved same-browser IndexedDB persistence and route state.
+- Direct browser Helia retrieval is not reliable here without provider discovery/relay/pinning; copied links need an availability path.
+- The implemented fix is intentionally server-assisted. Browser Helia still authors the CIDs, and the server verifies those CIDs before mirroring, but the server now does availability work for copied links.
+- The checkout still has no `.git` directory, so no local commit could be made.
+
+Open questions and caveats:
+
+- This fixes practical P2P-mode sharing through the current app, but it is not pure serverless P2P.
+- The next real decentralization step is provider discovery or a pinning/delegated-routing path that lets fresh browsers retrieve browser-authored blocks without relying on this app server mirror.
+
+## 2026-06-30 16:15:04 AKDT
+
+Prompt: "do this"
+
+Actions attempted:
+
+- Interpreted the prompt as implementing the next decentralization step from the prior response: live browser provider discovery and browser-to-browser block retrieval before falling back to the server availability mirror.
+- Re-read the ICC skill instructions and current `plan/plan.md`, `plan/log.md`, and `plan/tests.md` before editing.
+- Searched memory for the prior `ipfschan` deploy/runtime notes and reused `npm run verify` as the full local gate.
+- Added `src/server/p2p-signaling.js`, an in-memory provider/signaling router with:
+  - `GET /api/p2p/signal/:peerId` for Server-Sent Events signaling,
+  - `POST /api/p2p/providers` for live provider announcements,
+  - `GET /api/p2p/providers/:boardCid` for fresh-browser provider lookup,
+  - `POST /api/p2p/signal/:peerId` for offer/answer message forwarding.
+- Mounted the signaling router under `/api/p2p` in `src/server/routes.js`.
+- Added `src/client/p2p-block-exchange.js`, a WebRTC data-channel block exchange that:
+  - keeps a browser-local peer id,
+  - opens the server signaling stream,
+  - announces board providers,
+  - negotiates WebRTC offers/answers through the signaling endpoint,
+  - serves raw IPFS block bytes by CID from the browser Helia blockstore,
+  - fetches raw IPFS block bytes from connected browser peers.
+- Updated `src/client/decentralized-board.js` so P2P board loading tries local IndexedDB first, live peers second, and the availability mirror third.
+- Updated browser providers to announce board CIDs after local load, mirror load, and publish.
+- Added live-peer attachment root block prefetch during board load so small attachments render from browser `blob:` URLs instead of the mirror API.
+- Updated `src/client/main.js` to show `board ready from live peer` when a fresh browser loads through WebRTC.
+- Added API coverage for provider registration, provider lookup, and signaling message forwarding.
+- Rebuilt the client and restarted the live `ipfschan-https` tmux server with the same HTTPS settings.
+- Validated a live browser-to-browser text thread transfer with two separate Chrome profiles. Profile A stayed open as provider; profile B opened the copied board URL with clean storage and rendered the thread with `board ready from live peer`.
+- Validated a live browser-to-browser attachment path. Profile A stayed open after creating a text attachment thread; profile B loaded the copied board URL with clean storage and the attachment link became a `blob:` URL, not `/api/p2p/file/...`.
+- Updated README, plan, tests, and this log.
+
+Files touched:
+
+- `src/server/p2p-signaling.js`
+- `src/server/routes.js`
+- `src/server/__tests__/api.test.js`
+- `src/client/p2p-block-exchange.js`
+- `src/client/decentralized-board.js`
+- `src/client/main.js`
+- `README.md`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-06-30 16:15:04 AKDT` for this prompt entry.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py status --repo ipfschan --check-staleness`: repo artifacts were present and not stale at the start.
+- `node --check src/server/p2p-signaling.js && node --check src/server/routes.js && node --check src/server/__tests__/api.test.js && node --check src/client/p2p-block-exchange.js && node --check src/client/decentralized-board.js && node --check src/client/main.js`: passed.
+- `npm test`: passed with 4 files and 16 tests after adding the signaling regression test.
+- `npm run build`: passed and produced `dist/assets/index-B8_S5zGG.js` for the first live peer build and `dist/assets/index-B9CWf2Bu.js` after attachment prefetch.
+- `tmux respawn-pane -t ipfschan-https:0 -k 'cd /home/cos/projects/ipfschan && NODE_ENV=production HOST=0.0.0.0 PORT=4443 HTTPS=true HTTPS_KEY_FILE=.local/certs/ipfschan.key HTTPS_CERT_FILE=.local/certs/ipfschan.crt npm start >> .local/logs/ipfschan-https.log 2>&1'`: restarted the live HTTPS server after server route changes and again after the attachment prefetch build.
+- `curl -k -sS https://100.86.83.35:4443/api/health`: returned ready health JSON after restart.
+- `curl -k -sS https://100.86.83.35:4443/ | rg -n 'index-B9CWf2Bu|Board Mode'`: confirmed the live server served the current bundle.
+- Two-profile live-peer thread check: profile B loaded profile A's copied URL `https://100.86.83.35:4443/?mode=p2p&board=baguqeerakho77wurtmad7bfo5l2ovfnj4rnzoqv5oxhx7fiwj7kigtwvpa5q&tag=live-peer&thread=baguqeera2ajfyakms2od2by3n5wexqdu5k4vfqghizs7ftzkbdd2turs474a` with `board ready from live peer` and rendered body `loaded through WebRTC data channel`.
+- Two-profile live-peer attachment check after prefetch: profile B loaded `https://100.86.83.35:4443/?mode=p2p&board=baguqeeralttdrn2bipznrkgtttu3a5s4m2yuwt2j3n3c3szl3gglzikr6h7a&tag=live-peer-attachment-prefetch&thread=baguqeerablb6rzen6jys76d4gbcnh7amhuyy53gj4e3japmob7kzzzrpxl2q` with `board ready from live peer`; the attachment href was `blob:https://100.86.83.35:4443/d04244e8-78a7-4ce0-b0da-e5a209cf1df9`.
+- `npm run verify`: passed with 4 Vitest files and 16 tests, production build, and smoke startup/shutdown.
+- Final live checks confirmed `https://100.86.83.35:4443/api/health` is ready, `ipfschan-https` is running, port `4443` is held by the intended Node process, and no leftover Chrome/WebRTC test profiles are running.
+- `git status --short`: failed because `/home/cos/projects/ipfschan` is not a git repository.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: refreshed successfully with 68 files indexed.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed successfully with 168 chunks.
+
+Failures and pivots:
+
+- The first live-peer attachment render did not reliably populate an attachment href in the fresh browser. The fix was to prefetch attachment root blocks during live-peer board load.
+- Node-side fetch to the self-signed HTTPS URL failed without certificate override during one ad hoc provider lookup; browser-origin fetches over the accepted page context worked.
+- The live peer path requires the provider browser tab to remain open. If no live provider is connected or WebRTC negotiation fails, the server availability mirror is still the fallback.
+- This checkout still has no `.git` directory, so no local commit could be made.
+
+Open questions and caveats:
+
+- The current WebRTC block exchange is an app-level block-transfer protocol, not Bitswap-over-libp2p.
+- Attachment support currently prefetches the attachment root block, which works for small raw UnixFS attachments. Larger multi-block UnixFS files need block graph traversal or request-on-demand traversal before the live peer path can serve all attachment shapes.
+- NAT-hostile networks may need TURN or explicit relay configuration; the current validation used two browser profiles on this host over the live HTTPS app.
+
+## 2026-06-30 18:39:51 AKDT
+
+Prompt: "style wise this site looks like crap. I'd like you to give it a makeover with functionality and user experience in mind give it a retro terminal style reminiscent of the deno_tui app in projects"
+
+Actions attempted:
+
+- Kept the AGENTS.md instructions from the prompt in context, including the required plan/log/test doc updates and Node 24 constraint.
+- Re-read `plan/plan.md`, `plan/log.md`, and `plan/tests.md` before editing.
+- Used the ICC workflow to check repo indexing state and refreshed ICC artifacts after the work.
+- Searched memory for current `ipfschan` runtime/verification notes and for local `deno_tui` style context.
+- Inspected the current client HTML, CSS, and JS, then inspected `deno_tui` palette/readout/window framing references in `/home/cos/projects/deno_tui/app/styles.ts`, `/home/cos/projects/deno_tui/app/neon_theme.ts`, `/home/cos/projects/deno_tui/app/main.ts`, and screenshot palette code.
+- Reworked the client into a deno_tui-inspired terminal monitor layout:
+  - header brand shell prompt,
+  - persistent mode/board/tag/thread readouts,
+  - a system status strip,
+  - terminal-framed panes for board mode, tags, composer, import, thread list, and active thread,
+  - denser command buttons and file inputs,
+  - improved thread cards, nested reply cards, attachment links, and empty thread state,
+  - desktop three-pane layout plus mobile single-column collapse.
+- Added a small telemetry updater in `src/client/main.js` so the new readouts track current mode, board CID, tag, and thread CID.
+- Built the production client and validated the live HTTPS instance at `https://100.86.83.35:4443/`.
+- Captured and inspected desktop, mobile, and active-thread screenshots from the live HTTPS app.
+- Updated README, project plan, testing strategy, and this log.
+
+Files touched:
+
+- `src/client/index.html`
+- `src/client/styles.css`
+- `src/client/main.js`
+- `README.md`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-06-30 18:39:51 AKDT` for this prompt entry.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py status --repo ipfschan --check-staleness`: passed; artifacts present and not stale.
+- `node --check src/client/main.js`: passed.
+- `npm test`: passed with 4 files and 16 tests.
+- `npm run build`: passed and produced the final assets `dist/assets/index-Bmj0YnMW.css` and `dist/assets/index-C_Tz40Wa.js`; Vite still warned that the Helia/libp2p chunk is larger than 500 kB.
+- `curl -k -sS https://100.86.83.35:4443/api/health`: returned ready health JSON with 6 posts, 3 threads, and 3 tags.
+- `curl -k -sS https://100.86.83.35:4443/ | rg -n 'index-Bmj0YnMW|index-C_Tz40Wa|terminal-header'`: confirmed the live HTTPS server is serving the rebuilt UI assets.
+- `google-chrome --headless=new --no-sandbox --ignore-certificate-errors --window-size=1440,1000 --screenshot=/tmp/ipfschan-ui-desktop.png https://100.86.83.35:4443/`: captured the desktop screenshot successfully.
+- `google-chrome --headless=new --no-sandbox --ignore-certificate-errors --window-size=390,900 --screenshot=/tmp/ipfschan-ui-mobile.png https://100.86.83.35:4443/`: captured the mobile screenshot successfully.
+- `curl -k -sS https://100.86.83.35:4443/api/tags`, `curl -k -sS https://100.86.83.35:4443/api/tags/AASDF/threads`, and `curl -k -sS https://100.86.83.35:4443/api/tags/SAGE/threads`: fetched live thread data for route validation.
+- `google-chrome --headless=new --no-sandbox --ignore-certificate-errors --window-size=1440,1000 --screenshot=/tmp/ipfschan-ui-thread.png 'https://100.86.83.35:4443/?tag=aasdf&thread=baguqeeravzp7lvrl4ah6czb6hrxdauhn66hz75q4mxikcv6ajuxzj3e5asfq'`: captured and inspected the active-thread route; readouts, selected tag, thread card, copy-link button, nested replies, and attachment link rendered correctly.
+- `npm run verify`: passed with 4 Vitest files and 16 tests, production build, and smoke startup/shutdown.
+- `pgrep -af 'src/server/index.js|ipfschan'`: showed only the intended live `ipfschan-https` Node server path for this app.
+- `git status --short`: failed because `/home/cos/projects/ipfschan` is not a git repository.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: refreshed successfully with 68 files indexed.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed successfully with 171 chunks.
+
+Failures and pivots:
+
+- The first desktop screenshot showed the disabled `Copy Board Link` button wrapping awkwardly in the narrow board pane. The fix was to make the board controls use two equal grid columns with tighter button padding and nowrap text, then rebuild and recapture screenshots.
+- Headless Chrome emitted non-fatal accessibility-bus warnings during screenshot capture. One earlier mobile capture also emitted a transient GPU command-buffer warning, but screenshots were written successfully.
+- The checkout still has no `.git` directory, so the requested periodic local commit could not be made.
+
+Open questions and caveats:
+
+- This was a client UI/UX pass only; the P2P/server behavior was intentionally left unchanged.
+- The live HTTPS server remained running for VPN testing. The temporary smoke server from `npm run verify` shut itself down.
+
+## 2026-06-30 19:15:56 AKDT
+
+Prompt: "image attachments aren't working in peer-to-peer"
+
+Follow-up prompts during the same work slice: "keep going" repeated while the P2P image path was still unresolved.
+
+Actions attempted:
+
+- Re-read the ICC skill instructions and current `plan/plan.md`, `plan/log.md`, and `plan/tests.md` before editing.
+- Searched memory for the existing `ipfschan` P2P image-attachment debugging notes after context compaction.
+- Inspected `src/client/decentralized-board.js`, `src/client/p2p-block-exchange.js`, `src/client/main.js`, `src/client/board-model.js`, and relevant server/API attachment paths.
+- Reproduced the core failure signature in two clean headless Chrome profiles against the live HTTPS app: profile B loaded the board with `board ready from live peer`, but image attachments still resolved to `/api/p2p/file/...`, meaning the server mirror was serving image bytes.
+- Added `collect()` export and `createPeerBackedBlockstore()` in `src/client/decentralized-board.js` so local IndexedDB misses during UnixFS reads can ask open WebRTC peers for missing blocks.
+- Added `src/client/__tests__/peer-blockstore.test.js` covering byte collection, local-first behavior, peer fetch/cache behavior, and async-iterator read failures.
+- Added attachment-level WebRTC file-byte transfer to `src/client/p2p-block-exchange.js` with `get-file` and `missing-file` messages.
+- Updated `DecentralizedBoard.attachmentUrl()` so P2P attachment reads try browser Helia/peer-backed UnixFS, then request file bytes from open peers, re-add them through Helia, verify the resulting CID, and only then fall back to `/api/p2p/file/...`.
+- Increased the P2P byte-transfer timeout to 60 seconds for larger image attachments.
+- Updated README, project plan, and testing strategy to describe the attachment peer-transfer path and its remaining coverage needs.
+
+Files touched:
+
+- `src/client/decentralized-board.js`
+- `src/client/p2p-block-exchange.js`
+- `src/client/__tests__/peer-blockstore.test.js`
+- `README.md`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-06-30 19:15:56 AKDT` for this prompt entry.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py status --repo ipfschan --check-staleness`: passed; index was present and not stale.
+- `node --input-type=module <<'EOF' ... EOF`: two-profile Chrome repro initially showed `board ready from live peer` while attachment image and link URLs still used `/api/p2p/file/...`.
+- `node --check src/client/decentralized-board.js`: passed after the peer-backed blockstore changes.
+- `npx vitest run src/client/__tests__/peer-blockstore.test.js src/client/__tests__/board-model.test.js`: passed with 2 files and 8 tests after adding the first blockstore tests.
+- `npm test`: passed with 5 files and 20 tests after adding peer blockstore coverage.
+- `npm run build`: passed and produced `dist/assets/index-CWd4Uqcv.js`; Vite still warned about the large Helia/libp2p chunk.
+- `npm run verify`: passed on 2026-07-01 with 5 Vitest files, 20 tests, production build, and smoke startup/shutdown.
+
+Failures and pivots:
+
+- A first CDP repro harness connected to Chrome's browser-level WebSocket instead of a page target, so `Page.enable` failed. The later harness connected to page targets.
+- A second repro attempt evaluated profile B while navigation was replacing the JS context, producing `Execution context was destroyed`; the harness was adjusted to wait for navigation.
+- The blockstore-only approach still fell back to `/api/p2p/file/...` during live image validation, so the implementation pivoted to an explicit file-byte request over the existing WebRTC data channel.
+- Full fresh-browser blob-URL validation of the final file-byte path was not completed before the next prompt shifted the active task to GitHub publishing.
+
+Open questions and caveats:
+
+- The code path now supports peer file-byte transfer with CID verification, but it still needs a dedicated automated browser assertion that fresh-profile P2P image attachments resolve to `blob:` and not `/api/p2p/file/...`.
+- The server mirror remains the correct fallback when no provider tab is open, WebRTC fails, or CID verification fails.
+
+## 2026-07-01 18:23:18 AKDT
+
+Prompt: "https://github.com/ubernaut/ipfschan here is a link to a repository I just created for this project please set this directory up to track that repository and push an initial commit"
+
+Actions attempted:
+
+- Re-read the ICC skill instructions and current `plan/plan.md`, `plan/log.md`, and `plan/tests.md` before changing Git state.
+- Searched memory for `ipfschan` no-git, verify-gate, and P2P image-attachment notes.
+- Confirmed the directory was still not a Git repository.
+- Inspected `.gitignore` and `.dockerignore`; generated/runtime paths including `node_modules/`, `dist/`, `data/`, and `.local/` are ignored.
+- Confirmed the linked repository is reachable and empty with `git ls-remote https://github.com/ubernaut/ipfschan.git`.
+- Confirmed Git identity is configured as `ubernaut <collin.schroeder@gmail.com>`.
+- Confirmed SSH authentication to GitHub works for `ubernaut`; `gh` is not installed, so the push will use the SSH Git remote.
+- Updated README, `plan/plan.md`, and `plan/tests.md` so the initial commit documents the current P2P attachment behavior and GitHub publish slice.
+- Ran the full verification gate before initializing and publishing the repository.
+
+Files touched:
+
+- `README.md`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-01 18:23:18 AKDT` for this prompt entry.
+- `git status --short --branch`: failed before initialization because this directory did not have a `.git` directory.
+- `find . -maxdepth 2 -type f | sort | sed 's#^./##' | head -n 250`: showed source/docs plus ignored generated/runtime paths.
+- `gh auth status && gh repo view ubernaut/ipfschan --json name,owner,isPrivate,url,defaultBranchRef`: failed because `gh` is not installed.
+- `git ls-remote https://github.com/ubernaut/ipfschan.git`: succeeded with no refs, consistent with an empty new repository.
+- `git config --global user.name && git config --global user.email`: returned `ubernaut` and `collin.schroeder@gmail.com`.
+- `ssh -T git@github.com`: authenticated successfully as `ubernaut`.
+- `npm run verify`: passed with 5 Vitest files, 20 tests, production build, and smoke startup/shutdown.
+
+Failures and pivots:
+
+- GitHub CLI is not installed, so repository inspection/push uses Git directly.
+- HTTPS read access worked, but SSH authentication is the available write path, so the initial remote will use `git@github.com:ubernaut/ipfschan.git`.
+
+Open questions and caveats:
+
+- The Git initialization, commit, and push happen after this log update so the initial commit can include the updated project documentation.

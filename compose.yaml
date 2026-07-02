@@ -1,0 +1,16 @@
+services:
+  ipfschan:
+    build: .
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4000
+      DATA_DIR: /data
+      IPFS_OFFLINE: "true"
+    ports:
+      - "4000:4000"
+    volumes:
+      - ipfschan-data:/data
+    restart: unless-stopped
+
+volumes:
+  ipfschan-data:
