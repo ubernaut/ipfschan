@@ -725,3 +725,50 @@ Open questions and caveats:
 - GitHub Pages will need the repository Pages source configured to `main` and `/docs` in GitHub settings if it is not already configured.
 - The Pages build is intentionally browser-local. It can create/reload boards from the same browser's IndexedDB, but cross-browser sharing, signaling, and server mirror fallback still require the Node app.
 - The commit and push happen after this log entry so the commit can include the generated `docs/` bundle and updated documentation.
+
+## 2026-07-01 20:47:32 AKDT
+
+Prompt: "is there a public ipfs relay you can configure this client to connect to."
+
+Actions attempted:
+
+- Kept the AGENTS.md instructions in context, including plan/log updates and the Node 24 constraint.
+- Re-read `plan/plan.md` and the start of `plan/log.md` before answering.
+- Searched memory for current `ipfschan` P2P, live-peer, relay, and browser-Helia notes.
+- Checked ICC status for this repo and found the ICC index is stale relative to commit `ddabf8f`, which is expected after the previous Pages commit.
+- Inspected current client/server P2P wiring in `src/client/p2p-block-exchange.js`, `src/client/decentralized-board.js`, `src/server/p2p-signaling.js`, README, and plan files.
+- Inspected installed Helia 6 browser defaults and confirmed they include public delegated routing, public bootstrappers, circuit relay transport, WebRTC/WebSocket transports, and trustless gateway fallback when Helia networking is enabled.
+- Checked current IPFS/libp2p documentation for public IPFS utilities, delegated routing, trustless gateway behavior, public gateways, and circuit relay setup.
+- Updated `plan/plan.md` with the current direction: public IPFS utilities can help with retrieval, but they are not a drop-in replacement for this app's provider registry, WebRTC signaling, or availability mirror.
+
+Files touched:
+
+- `plan/plan.md`
+- `plan/log.md`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-01 20:47:32 AKDT` for this prompt entry.
+- `sed -n '1,220p' /home/cos/.codex/skills/icc/SKILL.md`: reviewed ICC skill instructions.
+- `rg -n "ipfschan|P2P|relay|gateway|Helia|libp2p" /home/cos/.codex/memories/MEMORY.md`: found current P2P image/attachment debugging notes for this repo.
+- `sed -n '1,180p' plan/plan.md && sed -n '1,120p' plan/log.md`: reviewed project plan/log context before answering.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py status --repo ipfschan --check-staleness`: passed, but reported the index stale because it still points at `7a20bb7` while the checkout is at `ddabf8f`.
+- `rg -n "P2PBlockExchange|signal|providers|mirror|gateway|trustless|httpGateway|bootstrap|webrtc|relay|libp2p|createHelia|blockBrokers|routers" src package.json README.md plan -g '!plan/log.md'`: found the app-level P2P signaling, provider, and mirror paths.
+- `sed -n '1,260p' src/client/p2p-block-exchange.js && sed -n '1,220p' src/server/p2p-signaling.js`: confirmed live peer exchange currently relies on app-owned SSE signaling and provider lookup.
+- `sed -n '1,260p' node_modules/helia/src/utils/libp2p-defaults.browser.ts && sed -n '1,260p' node_modules/helia/src/utils/libp2p.ts`: confirmed Helia's browser defaults include delegated routing, public bootstrappers, circuit relay transport, WebRTC/WebSocket transports, and network services.
+- `sed -n '1,240p' node_modules/helia/src/utils/helia-defaults.ts && sed -n '1,220p' node_modules/helia/package.json`: confirmed Helia defaults include trustless gateway and Bitswap block brokers plus libp2p and HTTP gateway routing.
+- `npm view @helia/verified-fetch version @helia/routers version @helia/delegated-routing-v1-http-api-client version --json`: returned `7.2.16` for the package lookup path that completed.
+- Web documentation checks:
+  - IPFS public utilities list public gateways `ipfs.io`, `dweb.link`, and `trustless-gateway.link`, plus delegated routing at `https://delegated-ipfs.dev/routing/v1`.
+  - IPFS browser retrieval docs describe delegated routing and trustless gateway defaults and recommend self-hosting for production.
+  - libp2p configuration docs describe circuit relay, automatic reservations, and preconfigured relay reservations rather than a single guaranteed public relay URL.
+
+Failures and pivots:
+
+- No code change was made because the prompt was a design/infrastructure question. A safe implementation needs a clear choice between public retrieval fallback and a real self-hosted relay/signaling service.
+- A public IPFS gateway/delegated-routing endpoint can retrieve CIDs that are already discoverable on IPFS, but it will not by itself announce or retain browser-authored board blocks from this app.
+
+Open questions and caveats:
+
+- The reliable deploy path remains running our Node service or a small self-hosted relay/mirror service for provider lookup, signaling, and retention of fresh boards.
+- A Pages-only public retrieval mode could be added next, but it should be presented honestly as "load public IPFS CIDs when available," not full serverless P2P publishing.

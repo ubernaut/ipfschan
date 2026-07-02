@@ -116,6 +116,12 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Pages mode skips server mirror and signaling calls; it can create and reload local browser boards from IndexedDB, but cross-browser sharing still requires the Node app.
 - Added `docs/.nojekyll` so GitHub Pages serves Vite's asset paths directly.
 
+## 2026-07-01 Public IPFS Relay/Gateway Direction
+
+- Public IPFS utilities can help with retrieval: delegated routing at `https://delegated-ipfs.dev/routing/v1`, public gateways such as `https://ipfs.io` and `https://dweb.link`, and trustless gateway fallback at `https://trustless-gateway.link`.
+- These are not a direct replacement for the app's provider registry, WebRTC signaling, or availability mirror because browser-authored board blocks still need to be announced, reachable, and retained somewhere.
+- A practical Pages-compatible next slice is to add an explicit public-retrieval mode for CIDs already available on IPFS while keeping our Node service or a self-hosted relay/mirror as the reliable path for freshly authored boards.
+
 ## Next Useful Work
 
 1. Deploy to a named target and attach durable storage or a volume for `/data`.
