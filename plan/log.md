@@ -1291,6 +1291,20 @@ Commands run and results:
 - Follow-up `npm run build`: passed; final normal build asset included `dist/assets/index-4E3HEDMC.js`. Vite still warned about the large Helia/libp2p chunk.
 - Follow-up `npm run build:pages`: passed; final Pages build asset included `docs/assets/index-Cljc6iG6.js`. Vite still warned about the large Helia/libp2p chunk.
 - Follow-up `npm run smoke`: passed at `http://127.0.0.1:35927`.
+- `git commit -m "Add Pages URL record fallback"`: created `509ab80`.
+- `git push origin main`: pushed `509ab80` to `origin/main`.
+- GitHub Pages asset polling after `509ab80`: live Pages switched from `assets/index-_1_8Ctsd.js` to `assets/index-BojOaFYz.js` on the second attempt.
+- `git commit -m "Hydrate Pages thread records eagerly" && git push origin main`: created and pushed `59f218a` after the fast Pages hydration follow-up.
+- GitHub Pages asset polling after `59f218a`: live Pages switched from `assets/index-BojOaFYz.js` to `assets/index-Cljc6iG6.js` on the second attempt.
+- First live Pages two-profile record probe after `59f218a`: failed because the harness readiness check was case-sensitive. The page itself had already reached `ready for a first thread`.
+- Second live Pages two-profile record probe after `59f218a`: passed against `assets/index-Cljc6iG6.js`.
+  - Profile A created index `baguqeeranx6jz7y22s35ns6tbrkryjysufm67lwvey5b5lxzaup4cdu23bgq` and thread `baguqeeraoomdjvscdjvaw3bq5jjexlsy34ajefsatmbcx2llv45b5aoq6wta`; the URL had `records=` length 454 and rendered 1 post.
+  - Profile B opened A's copied URL from a fresh profile and rendered 1 post with `threads and tags ready from verified URL records`.
+  - Profile B posted reply CID `baguqeera6vjhavmpbh6jsdfqhidsbwwkzbe247q6uclqxtisomklrxg26f4a`; B's updated URL had new index `baguqeeraohiknf3eq76zz6ltlcd2ga6xcbqprv7f6uefkmtb4lmufj56mwvq`, `replies=baguqeera6vjhavmpbh6jsdfqhidsbwwkzbe247q6uclqxtisomklrxg26f4a`, `records=` length 976, and rendered 2 posts.
+  - Profile A opened B's updated URL and rendered 2 posts, including B's reply, with `threads and tags ready from verified URL records`.
+  - The probe captured 7 console/log/stderr entries and 5 after filtering normal Chrome startup noise. Samples were a favicon/resource 404, one public libp2p direct WebSocket failure, and Chrome GCM `DEPRECATED_ENDPOINT` stderr. No app runtime exception was reported by the harness.
+- `ps -eo pid,ppid,cmd | rg 'ipfschan-pages-record|remote-debugging-port=94|google-chrome --headless|node --input-type=module' || true`: found no leftover live probe processes.
+- `find /tmp -maxdepth 1 -type d -name 'ipfschan-pages-record-*' -print`: found no leftover live probe temp profiles.
 
 Failures and pivots:
 
@@ -1302,4 +1316,4 @@ Open questions and caveats:
 - The URL-record fallback makes updated shared links render text posts and replies on Pages even when public IPFS discovery is slow or failing.
 - Attachment bytes are not embedded in URLs, so images still depend on browser Helia, public IPFS reachability, live peers, or the Node-hosted mirror where available.
 - Already-open GitHub Pages tabs still do not get live reply discovery without an updated URL or a future public relay/signaling/pinning layer.
-- A live GitHub Pages retest of the new `records=` bundle is pending after committing, pushing, and waiting for Pages to refresh to `assets/index-Cljc6iG6.js`.
+- The live GitHub Pages retest passed for updated-link reply sharing from another fresh profile. This confirms that another person's reply is visible when they share the updated URL, but it does not add automatic push-style propagation to an old already-open Pages tab.
