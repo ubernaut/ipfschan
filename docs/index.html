@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ipfschan</title>
+    <script type="module" crossorigin src="/ipfschan/assets/index-d-a5rfk6.js"></script>
+    <link rel="stylesheet" crossorigin href="/ipfschan/assets/index-Bmj0YnMW.css">
+  </head>
+  <body>
+    <div id="app">
+      <header class="terminal-header">
+        <div class="brand-lockup">
+          <p class="prompt-line">cos@ipfschan:~$ ./board</p>
+          <h1>ipfschan</h1>
+          <p class="subtitle">IPFS-hosted threads and replies</p>
+        </div>
+        <div class="readout-grid" aria-label="board state">
+          <div class="readout">
+            <span>mode</span>
+            <strong id="mode-readout">SERVER</strong>
+          </div>
+          <div class="readout">
+            <span>board</span>
+            <strong id="board-readout">server index</strong>
+          </div>
+          <div class="readout">
+            <span>tag</span>
+            <strong id="tag-readout">none</strong>
+          </div>
+          <div class="readout">
+            <span>thread</span>
+            <strong id="thread-readout">none</strong>
+          </div>
+        </div>
+      </header>
+
+      <div class="status-frame">
+        <span class="status-label">SYS</span>
+        <div id="status" role="status" aria-live="polite"></div>
+      </div>
+
+      <section id="p2p-board" class="terminal-panel">
+        <div class="section-heading">
+          <h2>Board Mode</h2>
+          <div class="mode-controls" role="group" aria-label="board mode">
+            <button id="server-mode" class="secondary" type="button">Server</button>
+            <button id="p2p-mode" class="secondary" type="button">P2P</button>
+          </div>
+        </div>
+        <div class="meter-line">
+          <span>peer sync</span>
+          <div id="p2p-status" role="status" aria-live="polite"></div>
+        </div>
+        <div class="board-actions">
+          <button id="new-p2p-board" class="secondary" type="button">New Board</button>
+          <button id="copy-board-link" class="secondary" type="button">Copy Board Link</button>
+        </div>
+        <form id="load-board-form" class="inline-form">
+          <label>
+            Board CID
+            <input type="text" name="boardCid" placeholder="bafy..." />
+          </label>
+          <button type="submit">Load Board</button>
+        </form>
+        <p id="current-board" class="cid-line">Current board: server index</p>
+      </section>
+
+      <section id="tags-section" class="terminal-panel">
+        <h2>Tags</h2>
+        <div id="tags"></div>
+      </section>
+
+      <section id="new-thread" class="terminal-panel">
+        <h2>New Thread</h2>
+        <form id="thread-form">
+          <label>
+            Title
+            <input type="text" name="title" required maxlength="200" />
+          </label>
+          <label>
+            Tags (comma separated)
+            <input type="text" name="tags" placeholder="ipfs, ideas" required />
+          </label>
+          <label>
+            Body
+            <textarea name="body" rows="4" required></textarea>
+          </label>
+          <label>
+            Attachment (optional)
+            <input type="file" name="attachment" />
+          </label>
+          <button type="submit">Create Thread</button>
+        </form>
+      </section>
+
+      <section id="import-post" class="terminal-panel">
+        <h2>Import CID</h2>
+        <form id="import-form">
+          <label>
+            Post CID
+            <input type="text" name="cid" placeholder="bafy..." required />
+          </label>
+          <button type="submit">Import Post</button>
+        </form>
+      </section>
+
+      <section id="threads-section" class="terminal-panel">
+        <h2>Threads</h2>
+        <div id="threads"></div>
+      </section>
+
+      <section id="thread-view" class="terminal-panel">
+        <div class="section-heading">
+          <h2>Thread</h2>
+          <button id="copy-thread-link" class="secondary hidden" type="button">Copy Link</button>
+        </div>
+        <div id="thread-posts"></div>
+        <div id="reply-form-wrap" class="hidden">
+          <h3>Reply</h3>
+          <form id="reply-form">
+            <input type="hidden" name="parentCid" />
+            <label>
+              Title
+              <input type="text" name="title" maxlength="200" />
+            </label>
+            <label>
+              Body
+              <textarea name="body" rows="3" required></textarea>
+            </label>
+            <label>
+              Attachment (optional)
+              <input type="file" name="attachment" />
+            </label>
+            <button type="submit">Reply</button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

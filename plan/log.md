@@ -643,3 +643,85 @@ Failures and pivots:
 Open questions and caveats:
 
 - The Git initialization, commit, and push happen after this log update so the initial commit can include the updated project documentation.
+
+## 2026-07-01 18:52:49 AKDT
+
+Prompt: "please make a GitHub pages build into the docs folder and then push to origin"
+
+Actions attempted:
+
+- Kept the AGENTS.md instructions in context, including plan/log/test updates, Node 24, no TypeScript/React, and shutting down temporary servers.
+- Re-read `plan/plan.md`, `plan/log.md`, and `plan/tests.md` before continuing the Pages work.
+- Confirmed the checkout is on `main` tracking `origin/main`, Node is `v24.17.0`, and generated `docs/` files are present.
+- Added a `build:pages` Vite script that emits the GitHub Pages build into `docs/` with the `/ipfschan/` base path and a `.nojekyll` file.
+- Added `docs` to `.dockerignore` so container builds do not copy the static Pages artifact.
+- Added README deployment notes for the GitHub Pages build.
+- Added Pages-mode client behavior:
+  - default to P2P mode on Pages instead of trying unavailable `/api` routes,
+  - disable the Server mode button with a clear tooltip,
+  - show `browser local` while no board CID is selected,
+  - report local-only board publish messages,
+  - skip server mirror/signaling behavior in the browser-only build.
+- Found that the initial Pages runtime could render under `/ipfschan/` but headless screenshots still showed `starting browser node...` after the static files loaded.
+- Inspected the installed Helia 6 implementation and confirmed `createHelia()` starts libp2p unless `start: false` is supplied.
+- Probed Helia locally and confirmed DAG-JSON plus UnixFS add/read operations work with `start: false`, empty routers, and empty block brokers.
+- Updated Pages mode to create a local-only Helia instance using the IndexedDB blockstore without starting libp2p networking.
+- Served `docs/` behind a temporary `/ipfschan/` path and validated the built Pages app with curl, headless Chrome screenshots, and a Chrome DevTools Protocol DOM/resource probe.
+- Confirmed the final Pages runtime reaches `board ready`, writes a `?mode=p2p&board=<cid>` URL, loads 13 static assets, and makes no `/api` requests.
+- Shut down the temporary Python HTTP server and headless Chrome CDP session after validation.
+- Refreshed ICC index and memory artifacts after the Pages changes.
+- Updated README, project plan, testing strategy, and this log.
+
+Files touched:
+
+- `.dockerignore`
+- `README.md`
+- `package.json`
+- `docs/.nojekyll`
+- `docs/index.html`
+- `docs/assets/*`
+- `src/client/decentralized-board.js`
+- `src/client/main.js`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-01 18:52:49 AKDT` for this prompt entry.
+- `git status --short --branch`: showed `main...origin/main` with source/doc changes and untracked `docs/`.
+- `git diff --stat`: showed Pages-related edits in `.dockerignore`, README, `package.json`, plan docs, and client files before generated docs were included.
+- `node -v`: returned `v24.17.0`.
+- `find docs -maxdepth 2 -type f | sort`: confirmed `docs/index.html`, `docs/.nojekyll`, and Vite asset files exist.
+- `curl -sSf http://127.0.0.1:8765/ipfschan/`: returned the generated Pages HTML with `/ipfschan/assets/...` paths.
+- `curl -sSI http://127.0.0.1:8765/ipfschan/assets/index-Btgi-Mw-.js`: returned `200 OK` for the first Pages bundle.
+- `google-chrome --headless=new --disable-gpu --no-sandbox --user-data-dir=/tmp/ipfschan-pages-profile --window-size=1365,900 --virtual-time-budget=5000 --screenshot=/tmp/ipfschan-pages.png http://127.0.0.1:8765/ipfschan/`: wrote a screenshot; the app rendered in Pages mode, but the peer-sync line still showed `starting browser node...`.
+- `google-chrome --headless=new --disable-gpu --no-sandbox --user-data-dir=/tmp/ipfschan-pages-profile-dom --window-size=1365,900 --virtual-time-budget=15000 --dump-dom http://127.0.0.1:8765/ipfschan/`: dumped DOM showing P2P/browser-local mode with Server disabled, but still `starting browser node...`.
+- `node --input-type=module -e "import { createHelia } from 'helia'; ..."`: confirmed local DAG-JSON and UnixFS round trips work with a non-started Helia instance.
+- `node --check src/client/main.js`: passed.
+- `node --check src/client/decentralized-board.js`: passed.
+- `npm test`: passed with 5 test files and 20 tests.
+- `npm run build`: passed; Vite still warned that the Helia/libp2p chunk is larger than 500 kB.
+- `npm run build:pages`: passed and regenerated `docs/`; Vite still warned that the Helia/libp2p chunk is larger than 500 kB.
+- `curl -sSI http://127.0.0.1:8765/ipfschan/assets/index-d-a5rfk6.js`: returned `200 OK` for the refreshed Pages bundle.
+- `google-chrome --headless=new --disable-gpu --no-sandbox --user-data-dir=/tmp/ipfschan-pages-profile-local-only --window-size=1365,900 --virtual-time-budget=8000 --screenshot=/tmp/ipfschan-pages-local-only.png http://127.0.0.1:8765/ipfschan/`: wrote a screenshot of the refreshed Pages UI; screenshot timing still captured the early startup label.
+- `google-chrome --headless=new --disable-gpu --no-sandbox --remote-debugging-port=9223 --user-data-dir=/tmp/ipfschan-pages-cdp --window-size=1365,900 http://127.0.0.1:8765/ipfschan/`: started a temporary headless Chrome CDP target for runtime probing.
+- First CDP `node --input-type=module -e ...` probe failed due to shell quoting around a JavaScript template literal before it reached Chrome.
+- Retried the CDP probe with safer quoting: passed, reporting `p2p: "board ready: baguqeera7...im3pia"`, `mode: "P2P"`, `board: "baguqeera7...im3pia"`, URL `http://127.0.0.1:8765/ipfschan/?mode=p2p&board=baguqeera7bpruu4zfjnciqdipnozbvnhvuwqvwc4ojznrupuxwl4qeim3pia`, `apiFetches: []`, and 13 static asset loads.
+- Temporary server logs showed all `/ipfschan/assets/...` requests returning 200; the only network 404 was the browser's automatic `/favicon.ico` request.
+- Sent Ctrl-C to the headless Chrome CDP session and the Python HTTP server; both exited.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: refreshed successfully with 95 files indexed.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed successfully with 199 chunks.
+
+Failures and pivots:
+
+- The first browser validation showed that static Pages assets loaded but the board init stayed at `starting browser node...` long enough to fail a meaningful runtime check. The fix was to make Pages mode use local-only Helia startup rather than waiting on browser libp2p.
+- One CDP probe failed because shell command substitution consumed JavaScript backticks. The validation was rerun with a quoted expression and succeeded.
+- Headless Chrome repeatedly emitted non-app Google API/GCM stderr warnings. They did not block rendering or CDP validation.
+- The browser made an automatic `/favicon.ico` request that returned 404 from the temporary static server. No app route or asset failed, and there were no `/api` requests in the final Pages-mode probe.
+
+Open questions and caveats:
+
+- GitHub Pages will need the repository Pages source configured to `main` and `/docs` in GitHub settings if it is not already configured.
+- The Pages build is intentionally browser-local. It can create/reload boards from the same browser's IndexedDB, but cross-browser sharing, signaling, and server mirror fallback still require the Node app.
+- The commit and push happen after this log entry so the commit can include the generated `docs/` bundle and updated documentation.

@@ -12,6 +12,7 @@
     "dev:server": "node src/server/index.js",
     "dev:client": "vite",
     "build": "vite build",
+    "build:pages": "vite build --mode pages --base /ipfschan/ --outDir ../../docs && touch docs/.nojekyll",
     "start": "node src/server/index.js",
     "test": "vitest run",
     "smoke": "node scripts/smoke.js",

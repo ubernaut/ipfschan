@@ -46,6 +46,14 @@ IPFS-hosted imageboard rebuilt from scratch. The goal is to let each user host t
 
 ## Deployment
 
+GitHub Pages static build:
+
+```sh
+npm run build:pages
+```
+
+This writes the browser-only Pages build to `docs/` with a `/ipfschan/` base path. The Pages build defaults to local P2P board mode because GitHub Pages cannot serve the Node `/api`, WebRTC signaling, or mirror endpoints.
+
 Container build:
 
 ```sh

@@ -108,6 +108,14 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Kept generated/runtime paths such as `node_modules/`, `dist/`, `data/`, and `.local/` ignored for the initial source commit.
 - Used the existing Node 24 verification gate before publishing the initial branch.
 
+## 2026-07-01 GitHub Pages Build
+
+- Added `npm run build:pages` to emit a Vite Pages build into `docs/` with the `/ipfschan/` base path.
+- Added a browser-only Pages mode that defaults to local P2P board mode instead of trying to call missing GitHub Pages `/api` routes.
+- Pages mode starts Helia with local-only storage settings so IndexedDB boards can publish without waiting on libp2p networking.
+- Pages mode skips server mirror and signaling calls; it can create and reload local browser boards from IndexedDB, but cross-browser sharing still requires the Node app.
+- Added `docs/.nojekyll` so GitHub Pages serves Vite's asset paths directly.
+
 ## Next Useful Work
 
 1. Deploy to a named target and attach durable storage or a volume for `/data`.

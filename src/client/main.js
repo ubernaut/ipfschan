@@ -2,6 +2,7 @@ import { decentralizedBoard } from './decentralized-board.js'
 
 const MODE_SERVER = 'server'
 const MODE_P2P = 'p2p'
+const PAGES_BUILD = import.meta.env.MODE === 'pages'
 
 const state = {
   mode: MODE_SERVER,
@@ -72,14 +73,20 @@ function updateTelemetry() {
   document.body.dataset.mode = state.mode
   if (appEl) appEl.dataset.mode = state.mode
   if (modeReadoutEl) modeReadoutEl.textContent = isP2PMode() ? 'P2P' : 'SERVER'
-  if (boardReadoutEl) boardReadoutEl.textContent = state.boardCid ? shortCid(state.boardCid) : 'server index'
+  if (boardReadoutEl) {
+    boardReadoutEl.textContent = state.boardCid
+      ? shortCid(state.boardCid)
+      : PAGES_BUILD
+        ? 'browser local'
+        : 'server index'
+  }
   if (tagReadoutEl) tagReadoutEl.textContent = state.currentTag || 'none'
   if (threadReadoutEl) threadReadoutEl.textContent = state.currentThread ? shortCid(state.currentThread) : 'none'
 }
 
 function readRoute() {
   const params = new URLSearchParams(window.location.search)
-  const mode = params.get('mode') === MODE_P2P ? MODE_P2P : MODE_SERVER
+  const mode = PAGES_BUILD || params.get('mode') === MODE_P2P ? MODE_P2P : MODE_SERVER
   return {
     mode,
     board: params.get('board') || null,
@@ -152,11 +159,15 @@ function updateRoute(
 function renderModeControls() {
   serverModeBtn.classList.toggle('active', state.mode === MODE_SERVER)
   p2pModeBtn.classList.toggle('active', state.mode === MODE_P2P)
+  serverModeBtn.disabled = PAGES_BUILD
+  serverModeBtn.title = PAGES_BUILD ? 'Server mode requires the Node app' : ''
   importSection.classList.toggle('hidden', isP2PMode())
   copyBoardLinkBtn.disabled = !state.boardCid
   currentBoardEl.textContent = state.boardCid
     ? `Current board: ${state.boardCid}`
-    : 'Current board: server index'
+    : PAGES_BUILD
+      ? 'Current board: browser local'
+      : 'Current board: server index'
   updateTelemetry()
 }
 
@@ -170,6 +181,9 @@ function boardReadyMessage() {
 }
 
 function boardPublishedMessage() {
+  if (decentralizedBoard.browserOnly) {
+    return `board published locally: ${shortCid(state.boardCid)}`
+  }
   if (decentralizedBoard.lastMirrorError) {
     return `board published locally; mirror failed: ${decentralizedBoard.lastMirrorError.message}`
   }
@@ -197,6 +211,12 @@ async function loadP2PBoard(boardCid) {
 }
 
 async function switchToServerMode({ replace = false } = {}) {
+  if (PAGES_BUILD) {
+    setStatus('Server mode requires the Node app; this Pages build is browser-local.', 'error')
+    await switchToP2PMode({ replace })
+    return
+  }
+
   state.mode = MODE_SERVER
   state.boardCid = null
   state.currentTag = null

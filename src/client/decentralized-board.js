@@ -16,6 +16,7 @@ import { P2PBlockExchange } from './p2p-block-exchange.js'
 
 const BOARD_STORAGE_KEY = 'ipfschan.p2p.boardCid'
 const LOAD_TIMEOUT_MS = 8000
+const PAGES_BUILD = import.meta.env.MODE === 'pages'
 
 export async function collect(source) {
   const resolved = typeof source?.then === 'function' ? await source : source
@@ -105,6 +106,7 @@ export class DecentralizedBoard {
     this.lastLoadSource = 'local'
     this.blockExchange = null
     this.peerFiles = null
+    this.browserOnly = PAGES_BUILD
   }
 
   async init() {
@@ -124,9 +126,17 @@ export class DecentralizedBoard {
 
     const blockstore = new IDBBlockstore('ipfschan-browser-blocks')
     await blockstore.open()
-    this.helia = await createHelia({ blockstore })
+    const heliaOptions = this.browserOnly
+      ? { blockstore, start: false, routers: [], blockBrokers: [] }
+      : { blockstore }
+    this.helia = await createHelia(heliaOptions)
     this.dag = dagJson(this.helia)
     this.files = unixfs(this.helia)
+    if (this.browserOnly) {
+      this.peerFiles = this.files
+      return
+    }
+
     this.blockExchange = new P2PBlockExchange({
       getBlockBytes: cid => this.readBlockBytes(cid),
       getFileBytes: cid => this.readFileBytes(cid)
@@ -160,6 +170,15 @@ export class DecentralizedBoard {
     const { CID } = await import('multiformats/cid')
     const normalizedBoardCid = CID.parse(boardCid).toString()
     const localBoardCid = this.latestLocalBoardCid()
+
+    if (this.browserOnly) {
+      try {
+        await this.loadFromHelia(normalizedBoardCid)
+        return this.boardCid
+      } catch (err) {
+        throw new Error('Board CID is not available in this browser-only Pages build')
+      }
+    }
 
     if (localBoardCid !== normalizedBoardCid) {
       try {
@@ -232,6 +251,10 @@ export class DecentralizedBoard {
 
   async loadFromPeers(boardCid) {
     await this.init()
+    if (!this.blockExchange) {
+      throw new Error('Live peer discovery is unavailable in this browser-only build')
+    }
+
     this.lastPeerError = null
     const providers = await this.blockExchange.providers(boardCid)
     if (!providers.length) {
@@ -419,6 +442,11 @@ export class DecentralizedBoard {
       const blob = new Blob([bytes], { type: attachment.mime || 'application/octet-stream' })
       return URL.createObjectURL(blob)
     } catch (err) {
+      if (!this.blockExchange) {
+        this.lastPeerError = err
+        throw new Error('Attachment is not available in this browser-only Pages build')
+      }
+
       try {
         const bytes = await this.blockExchange.fetchFileFromOpenPeers(attachment.cid)
         const storedCid = await this.files.addBytes(bytes)
@@ -450,6 +478,7 @@ export class DecentralizedBoard {
   async mirrorToServer() {
     this.lastMirror = null
     this.lastMirrorError = null
+    if (this.browserOnly) return null
 
     try {
       const formData = new FormData()
