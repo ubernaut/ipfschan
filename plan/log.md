@@ -1048,3 +1048,32 @@ Open questions and caveats:
 
 - The image fix improves newly posted attachments by advertising the UnixFS DAG block CIDs and retrying public attachment reads, but it still needs a slow live two-profile Pages validation with an actual image attachment to prove public image retrieval under real propagation timing.
 - Existing older posts that do not have `attachment.blocks` metadata still advertise the attachment root CID only unless the local browser can traverse the attachment DAG.
+
+## 2026-07-02 10:20:51 AKDT
+
+Prompt at 2026-07-02 10:20:01 AKDT: "did you push?"
+
+Prompt at 2026-07-02 10:20:51 AKDT: "go ahead and push."
+
+Actions attempted:
+
+- Checked the branch state and confirmed the thread-index UX/attachment availability work was committed locally but not pushed.
+- Added this log entry before pushing so the remote branch includes the required prompt record.
+
+Files touched:
+
+- `plan/log.md`
+
+Commands run and results:
+
+- `git status --short --branch`: reported `## main...origin/main [ahead 1]`.
+- `git log --oneline --decorate -5`: showed local `HEAD` at `a6142bb Refine thread index UX and attachment availability` and `origin/main` at `c0089af Record public IPFS probe cleanup`.
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-02 10:20:01 AKDT` for the push-status check and `2026-07-02 10:20:51 AKDT` for the push request.
+
+Failures and pivots:
+
+- No failure before push; the branch simply needed the local commit and this log update pushed to origin.
+
+Open questions and caveats:
+
+- The actual `git push` happens after this log entry is committed.
