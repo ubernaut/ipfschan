@@ -52,7 +52,7 @@ GitHub Pages static build:
 npm run build:pages
 ```
 
-This writes the serverless Pages build to `docs/` with a `/ipfschan/` base path. The Pages build runs the same P2P-first client and starts Helia's public browser IPFS networking instead of calling the Node WebRTC signaling or mirror endpoints. Fresh browser sharing first tries the public IPFS network, then falls back to CID-verified `records=` payloads embedded in the copied thread URL. Those records carry post text and attachment metadata, not attachment bytes, so images still depend on browser/public IPFS reachability. Pages has no live signaling helper, so an already-open tab needs a new shared URL to see replies posted after its current immutable index snapshot.
+This writes the serverless Pages build to `docs/` with a `/ipfschan/` base path. The Pages build runs the same P2P-first client and starts Helia's public browser IPFS networking instead of calling the Node WebRTC signaling or mirror endpoints. Copied thread links with `records=` hydrate those CID-verified records immediately, while bare index links still rely on public IPFS reachability. Those records carry post text and attachment metadata, not attachment bytes, so images still depend on browser/public IPFS reachability. Pages has no live signaling helper, so an already-open tab needs a new shared URL to see replies posted after its current immutable index snapshot.
 
 Container build:
 

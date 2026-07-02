@@ -1249,6 +1249,7 @@ Actions attempted:
 - Added a `records=` route payload that serializes the current thread's post records as base64url JSON while keeping attachment bytes out of the URL.
 - Kept URL records untrusted: route hydration imports them through `decentralizedBoard.importThreadRecords`, which re-adds each payload through Helia, compares the computed CID to the claimed CID, validates the requested thread root, and rolls back a failed batch.
 - Updated route loading so GitHub Pages can fall back to verified URL records when the public thread index CID is not reachable, then render tags, thread cards, and posts from those verified records.
+- Tightened the Pages path before live retesting so copied thread links with valid `records=` hydrate immediately instead of waiting for the long public-IPFS index timeout first. Malformed route records still fall back to the older public CID load path.
 - Kept existing `replies=` CID hints for backward compatibility and for explicit reply CID dependencies in shared links.
 - Updated README, `plan/plan.md`, and `plan/tests.md` to document the Pages URL-record fallback and the remaining limitation that old already-open Pages tabs still need an updated URL or a real relay/signaling layer to discover later replies.
 
@@ -1284,6 +1285,12 @@ Commands run and results:
 - `npm run smoke`: passed at `http://127.0.0.1:36151`.
 - `git diff --check`: passed.
 - `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan && EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed ICC with the current worktree; 100 files were indexed and 220 memory chunks were built. ICC still reported git head `e1cc9a73027ba7c882e392fbf8ca368a72403716` because the current slice had not been committed yet.
+- Follow-up `node --check src/client/main.js`: passed after eager route-record hydration.
+- Follow-up `npm test -- --run src/client/__tests__/route-state.test.js src/client/__tests__/decentralized-board.test.js`: passed with 2 files and 12 tests.
+- Follow-up `npm test`: passed with 7 files and 33 tests.
+- Follow-up `npm run build`: passed; final normal build asset included `dist/assets/index-4E3HEDMC.js`. Vite still warned about the large Helia/libp2p chunk.
+- Follow-up `npm run build:pages`: passed; final Pages build asset included `docs/assets/index-Cljc6iG6.js`. Vite still warned about the large Helia/libp2p chunk.
+- Follow-up `npm run smoke`: passed at `http://127.0.0.1:35927`.
 
 Failures and pivots:
 
@@ -1295,4 +1302,4 @@ Open questions and caveats:
 - The URL-record fallback makes updated shared links render text posts and replies on Pages even when public IPFS discovery is slow or failing.
 - Attachment bytes are not embedded in URLs, so images still depend on browser Helia, public IPFS reachability, live peers, or the Node-hosted mirror where available.
 - Already-open GitHub Pages tabs still do not get live reply discovery without an updated URL or a future public relay/signaling/pinning layer.
-- A live GitHub Pages retest of the new `records=` bundle is pending after committing, pushing, and waiting for Pages to refresh to `assets/index-BojOaFYz.js`.
+- A live GitHub Pages retest of the new `records=` bundle is pending after committing, pushing, and waiting for Pages to refresh to `assets/index-Cljc6iG6.js`.

@@ -601,8 +601,20 @@ async function applyRoute({ replace = false } = {}) {
 
   let routeRecordImport = { imported: 0, failed: null }
   let loadedFromRouteRecords = false
+  let eagerRouteRecordError = null
+  if (route.thread && route.records.length && decentralizedBoard.serverless) {
+    try {
+      routeRecordImport = await loadFromRouteRecords(route)
+      loadedFromRouteRecords = true
+    } catch (err) {
+      eagerRouteRecordError = err
+    }
+  }
+
   try {
-    await loadP2PBoard(route.board)
+    if (!loadedFromRouteRecords) {
+      await loadP2PBoard(route.board)
+    }
   } catch (err) {
     if (route.thread && route.records.length) {
       try {
@@ -614,7 +626,10 @@ async function applyRoute({ replace = false } = {}) {
         clearThreadView('')
         renderTags()
         renderThreads()
-        const message = `${err.message}; verified URL records also failed: ${routeErr.message}`
+        const recordMessage = eagerRouteRecordError?.message && eagerRouteRecordError.message !== routeErr.message
+          ? `${eagerRouteRecordError.message}; ${routeErr.message}`
+          : routeErr.message
+        const message = `${err.message}; verified URL records also failed: ${recordMessage}`
         setP2PStatus(message, 'error')
         throw new Error(message, { cause: routeErr })
       }

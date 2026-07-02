@@ -161,7 +161,7 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 
 - Added a `records=` thread URL payload containing the current thread's post records as base64url JSON.
 - URL records are treated as untrusted hints: each record is re-added through Helia and accepted only when the resulting CID matches the claimed CID and the record belongs to the requested thread root.
-- GitHub Pages route loading now falls back to verified URL records when the public IPFS thread index CID is not reachable yet, so shared thread links can render text posts and replies without waiting for public provider discovery.
+- GitHub Pages route loading now hydrates verified URL records immediately for copied thread links, so shared thread links can render text posts and replies without waiting for public provider discovery.
 - Attachment metadata is included in URL records, but attachment bytes are still served by browser Helia, public IPFS, live peers, or the Node-hosted mirror where available.
 - Pages remains static and has no live signaling channel; old already-open tabs need an updated shared URL or a future public relay/pinning layer to discover replies made after their current immutable snapshot.
 
