@@ -210,7 +210,8 @@ export class DecentralizedBoard {
 
     this.blockExchange = new P2PBlockExchange({
       getBlockBytes: cid => this.readBlockBytes(cid),
-      getFileBytes: cid => this.readFileBytes(cid)
+      getFileBytes: cid => this.readFileBytes(cid),
+      getThreadRecords: rootCid => this.threadRecords(rootCid)
     })
     await this.blockExchange.start()
     this.peerFiles = unixfs({
@@ -402,6 +403,156 @@ export class DecentralizedBoard {
     throw lastErr || new Error('Thread and tag blocks are not reachable from public IPFS yet')
   }
 
+  async readPostRecord(postCid, options = {}) {
+    const { CID } = await import('multiformats/cid')
+    const cid = CID.parse(postCid)
+    const post = await this.dag.get(cid, options)
+    return postRecordFromPayload(cid.toString(), post)
+  }
+
+  async readPostFromPublicIpfs(postCid) {
+    const { CID } = await import('multiformats/cid')
+    const normalizedPostCid = CID.parse(postCid).toString()
+    try {
+      await this.waitForPublicNetwork()
+    } catch (err) {
+      this.publicNetworkError = err
+    }
+
+    const deadline = Date.now() + PUBLIC_LOAD_TIMEOUT_MS
+    let lastErr = null
+    while (Date.now() < deadline) {
+      const remaining = deadline - Date.now()
+      try {
+        return await withAbortableTimeout(
+          signal => this.readPostRecord(normalizedPostCid, { signal }),
+          Math.min(PUBLIC_LOAD_ATTEMPT_TIMEOUT_MS, remaining),
+          'Reply block is not reachable from public IPFS yet'
+        )
+      } catch (err) {
+        lastErr = err
+        if (Date.now() >= deadline) break
+        await sleep(Math.min(PUBLIC_LOAD_RETRY_DELAY_MS, deadline - Date.now()))
+      }
+    }
+
+    throw lastErr || new Error('Reply block is not reachable from public IPFS yet')
+  }
+
+  async importPostCid(postCid, { expectedThreadRootCid = null } = {}) {
+    await this.init()
+    const { CID } = await import('multiformats/cid')
+    const normalizedPostCid = CID.parse(postCid).toString()
+    const existing = this.posts.find(post => post.cid === normalizedPostCid)
+    if (existing) return existing
+
+    let record
+    try {
+      record = await this.readPostRecord(normalizedPostCid)
+    } catch (localErr) {
+      if (!this.serverless || !this.publicNetwork) {
+        throw new Error(`Reply CID ${normalizedPostCid} is not reachable from this browser yet`, {
+          cause: localErr
+        })
+      }
+      record = await this.readPostFromPublicIpfs(normalizedPostCid)
+    }
+    this.validatePostThread(record, expectedThreadRootCid)
+    this.posts.push(record)
+    return record
+  }
+
+  validatePostThread(record, expectedThreadRootCid = null) {
+    const recordThreadRootCid = record.threadRootCid || record.cid
+    if (
+      expectedThreadRootCid &&
+      record.cid !== expectedThreadRootCid &&
+      recordThreadRootCid !== expectedThreadRootCid
+    ) {
+      throw new Error(`Reply CID ${record.cid} belongs to another thread`)
+    }
+  }
+
+  async importPeerPostRecord(record, expectedThreadRootCid = null) {
+    const existing = this.posts.find(post => post.cid === record?.cid)
+    if (existing) {
+      this.validatePostThread(existing, expectedThreadRootCid)
+      return { record: existing, imported: false }
+    }
+
+    const payload = postPayloadFromRecord(record)
+    const cid = await this.dag.add(payload)
+    if (cid.toString() !== record.cid) {
+      throw new Error(`Peer post CID mismatch for ${record.cid}`)
+    }
+    const importedRecord = postRecordFromPayload(record.cid, payload)
+    this.validatePostThread(importedRecord, expectedThreadRootCid)
+    this.posts.push(importedRecord)
+    return { record: importedRecord, imported: true }
+  }
+
+  async importThreadRecords(records, expectedThreadRootCid) {
+    if (!Array.isArray(records)) {
+      throw new Error('Peer returned invalid thread records')
+    }
+
+    let imported = 0
+    const importedCids = []
+    try {
+      for (const record of records) {
+        const result = await this.importPeerPostRecord(record, expectedThreadRootCid)
+        if (result.imported) {
+          imported += 1
+          importedCids.push(result.record.cid)
+        }
+      }
+    } catch (err) {
+      if (importedCids.length) {
+        const importedSet = new Set(importedCids)
+        this.posts = this.posts.filter(post => !importedSet.has(post.cid))
+      }
+      throw err
+    }
+    return imported
+  }
+
+  threadRecords(rootCid) {
+    return this.posts
+      .filter(post => post.cid === rootCid || post.threadRootCid === rootCid)
+      .map(post => ({ ...post }))
+  }
+
+  async importThreadFromPeers(rootCid) {
+    await this.init()
+    if (!this.blockExchange) {
+      throw new Error('Live peer thread sync is unavailable in this build')
+    }
+
+    this.lastPeerError = null
+    const providers = await this.blockExchange.providers(rootCid)
+    if (!providers.length) {
+      throw new Error('No live P2P providers found for this thread')
+    }
+
+    const errors = []
+    for (const provider of providers) {
+      try {
+        const connection = await this.blockExchange.connect(provider)
+        const records = await connection.getThreadPosts(rootCid)
+        const imported = await this.importThreadRecords(records, rootCid)
+        this.lastLoadSource = 'peer'
+        await this.announceProvider()
+        return imported
+      } catch (err) {
+        errors.push(`${provider.peerId}: ${err.message}`)
+      }
+    }
+
+    const error = new Error(`Live thread providers failed: ${errors.join('; ')}`)
+    this.lastPeerError = error
+    throw error
+  }
+
   async loadFromHelia(boardCid, options = {}) {
     const { CID } = await import('multiformats/cid')
     this.boardCid = CID.parse(boardCid).toString()
@@ -423,9 +574,7 @@ export class DecentralizedBoard {
 
     for (let index = 0; index < this.board.posts.length; index += 1) {
       const postCid = this.board.posts[index]
-      const cid = CID.parse(postCid)
-      const post = await this.dag.get(cid, options)
-      this.posts.push(postRecordFromPayload(cid.toString(), post))
+      this.posts.push(await this.readPostRecord(postCid, options))
       this.notifyOperationProgress({
         kind: 'load',
         completed: index + 2,
@@ -712,10 +861,27 @@ export class DecentralizedBoard {
     throw lastErr || new Error('Attachment bytes are not reachable from public IPFS yet')
   }
 
+  providerCidSet() {
+    const cids = new Set()
+    if (this.boardCid) cids.add(this.boardCid)
+    for (const post of this.posts) {
+      const rootCid = post.parentCid ? post.threadRootCid : post.cid
+      if (rootCid) cids.add(rootCid)
+    }
+    return [...cids]
+  }
+
   async announceProvider() {
-    if (!this.boardCid || !this.blockExchange) return null
+    if (!this.blockExchange) return null
+    const cids = this.providerCidSet()
+    if (!cids.length) return null
+
     try {
-      return await this.blockExchange.announce(this.boardCid)
+      const results = []
+      for (const cid of cids) {
+        results.push(await this.blockExchange.announce(cid))
+      }
+      return results
     } catch (err) {
       this.lastPeerError = err
       return null

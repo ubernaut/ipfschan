@@ -1,4 +1,9 @@
 import { decentralizedBoard } from './decentralized-board.js'
+import {
+  mergeCidLists,
+  parseCidList,
+  serializeCidList
+} from './route-state.js'
 
 const MODE_P2P = 'p2p'
 
@@ -9,6 +14,7 @@ const state = {
   threads: [],
   currentTag: null,
   currentThread: null,
+  replyCids: [],
   posts: []
 }
 
@@ -40,6 +46,8 @@ const operationFillEl = document.getElementById('operation-fill')
 const operationDetailEl = document.getElementById('operation-detail')
 
 let activeOperation = null
+let liveReplySyncTimer = null
+let liveReplySyncInFlight = false
 
 function el(tag, className, text) {
   const node = document.createElement(tag)
@@ -118,6 +126,13 @@ function hideOperation(kind = activeOperation?.kind) {
   activeOperation = null
 }
 
+function stopLiveReplySync() {
+  if (liveReplySyncTimer) {
+    clearInterval(liveReplySyncTimer)
+    liveReplySyncTimer = null
+  }
+}
+
 function updateOperationFromProgress(detail = {}) {
   if (!activeOperation) return
   if (detail.kind === 'load' && activeOperation.kind === 'load') {
@@ -162,18 +177,24 @@ function readRoute() {
   return {
     board: params.get('index') || params.get('board') || null,
     tag: params.get('tag') || null,
-    thread: params.get('thread') || null
+    thread: params.get('thread') || null,
+    replies: parseCidList([
+      params.get('replies'),
+      ...params.getAll('reply')
+    ])
   }
 }
 
 function routeUrl({
   board = state.boardCid,
   tag = state.currentTag,
-  thread = state.currentThread
+  thread = state.currentThread,
+  replies = thread ? state.replyCids : []
 } = {}) {
   const url = new URL(window.location.href)
   url.searchParams.delete('mode')
   url.searchParams.delete('board')
+  url.searchParams.delete('reply')
   if (board) {
     url.searchParams.set('index', board)
   } else {
@@ -192,28 +213,40 @@ function routeUrl({
     url.searchParams.delete('thread')
   }
 
+  const serializedReplies = thread ? serializeCidList(replies) : ''
+  if (serializedReplies) {
+    url.searchParams.set('replies', serializedReplies)
+  } else {
+    url.searchParams.delete('replies')
+  }
+
   return url
 }
 
-function threadUrl(rootCid = state.currentThread, tag = state.currentTag) {
-  return routeUrl({ thread: rootCid, tag })
+function threadUrl(
+  rootCid = state.currentThread,
+  tag = state.currentTag,
+  replies = rootCid === state.currentThread ? state.replyCids : []
+) {
+  return routeUrl({ thread: rootCid, tag, replies })
 }
 
 function indexUrl(boardCid = state.boardCid) {
-  return routeUrl({ board: boardCid, tag: null, thread: null })
+  return routeUrl({ board: boardCid, tag: null, thread: null, replies: [] })
 }
 
 function updateRoute(
   {
     board = state.boardCid,
     tag = state.currentTag,
-    thread = state.currentThread
+    thread = state.currentThread,
+    replies = thread ? state.replyCids : []
   } = {},
   { replace = false } = {}
 ) {
-  const url = routeUrl({ board, tag, thread })
+  const url = routeUrl({ board, tag, thread, replies })
   if (url.href === window.location.href) return
-  const statePayload = { mode: MODE_P2P, board, tag, thread }
+  const statePayload = { mode: MODE_P2P, board, tag, thread, replies: parseCidList(replies) }
   if (replace) {
     window.history.replaceState(statePayload, '', url)
   } else {
@@ -293,6 +326,7 @@ async function loadP2PBoard(boardCid) {
 async function switchToP2PMode({ boardCid = null, replace = false } = {}) {
   state.currentTag = null
   state.currentThread = null
+  state.replyCids = []
   state.threads = []
   state.posts = []
   clearThreadView('')
@@ -309,7 +343,9 @@ async function loadTags() {
 }
 
 function clearThreadView(message = '') {
+  stopLiveReplySync()
   state.currentThread = null
+  state.replyCids = []
   state.posts = []
   revokeObjectUrls()
   postsEl.textContent = message
@@ -343,15 +379,132 @@ async function fetchThread(rootCid) {
 }
 
 async function openThread(rootCid, { updateUrl: shouldUpdateUrl = true, tag = state.currentTag } = {}) {
+  const previousThread = state.currentThread
   const data = await fetchThread(rootCid)
   state.currentThread = rootCid
+  if (rootCid !== previousThread) {
+    state.replyCids = []
+  }
   state.posts = data.posts || []
   copyThreadLinkBtn.classList.remove('hidden')
   renderPosts()
   updateTelemetry()
   if (shouldUpdateUrl) {
-    updateRoute({ tag, thread: rootCid })
+    updateRoute({ tag, thread: rootCid, replies: state.replyCids })
   }
+  startLiveReplySync(rootCid)
+}
+
+async function importRouteReplies(replyCids, rootCid) {
+  const cids = mergeCidLists(replyCids)
+  if (!cids.length || !rootCid) {
+    return { imported: 0, failed: [] }
+  }
+
+  let imported = 0
+  const failed = []
+  const total = cids.length
+
+  for (let index = 0; index < cids.length; index += 1) {
+    const cid = cids[index]
+    updateOperation({
+      kind: 'load',
+      title: 'Updating tags and threads',
+      message: loadProgressMessage(index, total),
+      completed: index,
+      total,
+      detail: `reply hint: ${shortCid(cid)}`,
+      kicker: 'sync'
+    })
+    try {
+      const record = await decentralizedBoard.importPostCid(cid, {
+        expectedThreadRootCid: rootCid
+      })
+      if (record) {
+        imported += 1
+      }
+    } catch (err) {
+      failed.push({ cid, message: err.message })
+    }
+    updateOperation({
+      kind: 'load',
+      title: 'Updating tags and threads',
+      message: loadProgressMessage(index + 1, total),
+      completed: index + 1,
+      total,
+      detail: `reply hint: ${shortCid(cid)}`,
+      kicker: 'sync'
+    })
+  }
+
+  return { imported, failed }
+}
+
+function replyCidsForThread(rootCid) {
+  return decentralizedBoard
+    .getThreadTree(rootCid)
+    .posts
+    .filter(post => post.cid !== rootCid)
+    .map(post => post.cid)
+}
+
+function reportLiveReplySyncError(err) {
+  if (err.message.includes('No live P2P providers found')) return
+  setStatus(`live reply sync failed: ${err.message}`, 'error')
+}
+
+function requestLiveReplySync(rootCid) {
+  if (liveReplySyncInFlight || state.currentThread !== rootCid) return
+  liveReplySyncInFlight = true
+  syncLiveThreadReplies(rootCid)
+    .catch(reportLiveReplySyncError)
+    .finally(() => {
+      liveReplySyncInFlight = false
+    })
+}
+
+function startLiveReplySync(rootCid) {
+  stopLiveReplySync()
+  if (!rootCid || !decentralizedBoard.blockExchange) return
+  requestLiveReplySync(rootCid)
+  liveReplySyncTimer = setInterval(() => {
+    if (state.currentThread !== rootCid) {
+      stopLiveReplySync()
+      return
+    }
+    requestLiveReplySync(rootCid)
+  }, 10000)
+}
+
+async function syncLiveThreadReplies(rootCid) {
+  if (!rootCid || !decentralizedBoard.blockExchange || state.currentThread !== rootCid) {
+    return
+  }
+
+  const before = decentralizedBoard.getThreadTree(rootCid).posts.length
+  const imported = await decentralizedBoard.importThreadFromPeers(rootCid)
+  const refreshed = decentralizedBoard.getThreadTree(rootCid)
+  if (!imported || refreshed.posts.length <= before || state.currentThread !== rootCid) {
+    return
+  }
+
+  await loadTags()
+  if (state.currentTag) {
+    await loadThreadsForTag(state.currentTag)
+  }
+  state.posts = refreshed.posts
+  state.replyCids = mergeCidLists(state.replyCids, replyCidsForThread(rootCid))
+  renderPosts()
+  updateRoute(
+    {
+      board: state.boardCid,
+      tag: state.currentTag,
+      thread: rootCid,
+      replies: state.replyCids
+    },
+    { replace: true }
+  )
+  setStatus(`loaded ${refreshed.posts.length - before} live peer reply hint(s)`)
 }
 
 async function applyRoute({ replace = false } = {}) {
@@ -367,6 +520,7 @@ async function applyRoute({ replace = false } = {}) {
   const route = readRoute()
   state.mode = MODE_P2P
   state.boardCid = route.board
+  state.replyCids = route.thread ? route.replies : []
   renderModeControls()
 
   try {
@@ -379,6 +533,11 @@ async function applyRoute({ replace = false } = {}) {
     renderThreads()
     setP2PStatus(err.message, 'error')
     throw err
+  }
+
+  let replyImport = { imported: 0, failed: [] }
+  if (route.thread && route.replies.length) {
+    replyImport = await importRouteReplies(route.replies, route.thread)
   }
 
   await loadTags()
@@ -395,11 +554,17 @@ async function applyRoute({ replace = false } = {}) {
   if (route.thread) {
     try {
       await openThread(route.thread, { updateUrl: false, tag: route.tag })
+      state.replyCids = mergeCidLists(state.replyCids, route.replies)
       if (replace) {
         updateRoute(
-          { board: state.boardCid, tag: route.tag, thread: route.thread },
+          { board: state.boardCid, tag: route.tag, thread: route.thread, replies: state.replyCids },
           { replace: true }
         )
+      }
+      if (replyImport.failed.length) {
+        setStatus(`${replyImport.failed.length} reply hint(s) not reachable yet`, 'error')
+      } else if (replyImport.imported) {
+        setStatus(`loaded ${replyImport.imported} reply hint(s)`)
       }
     } catch (err) {
       clearThreadView('')
@@ -409,7 +574,7 @@ async function applyRoute({ replace = false } = {}) {
     clearThreadView('')
     if (replace) {
       updateRoute(
-        { board: state.boardCid, tag: route.tag, thread: null },
+        { board: state.boardCid, tag: route.tag, thread: null, replies: [] },
         { replace: true }
       )
     }
@@ -605,6 +770,7 @@ async function createThread(formData) {
     attachment: fileFromForm(formData, 'attachment')
   })
   state.boardCid = decentralizedBoard.boardCid
+  state.replyCids = []
   await loadTags()
   const tag = state.currentTag && post.tags.includes(state.currentTag)
     ? state.currentTag
@@ -653,6 +819,7 @@ async function replyP2P(parentCid, formData) {
     attachment: fileFromForm(formData, 'attachment')
   })
   state.boardCid = decentralizedBoard.boardCid
+  state.replyCids = mergeCidLists(state.replyCids, record.cid)
   await loadTags()
   if (state.currentTag) {
     await loadThreadsForTag(state.currentTag)
@@ -662,7 +829,7 @@ async function replyP2P(parentCid, formData) {
     await openThread(state.currentThread, { updateUrl: false })
   }
   updateRoute(
-    { board: state.boardCid, tag: state.currentTag, thread: state.currentThread },
+    { board: state.boardCid, tag: state.currentTag, thread: state.currentThread, replies: state.replyCids },
     { replace: true }
   )
   setP2PStatus(boardPublishedMessage(), publishStatusTone())
@@ -718,6 +885,7 @@ newP2PBoardBtn.addEventListener('click', async () => {
   try {
     state.mode = MODE_P2P
     clearThreadView('')
+    state.replyCids = []
     await decentralizedBoard.resetLocalThreads()
     state.boardCid = decentralizedBoard.boardCid
     state.currentTag = null

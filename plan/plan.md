@@ -148,11 +148,19 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Added attachment DAG CID collection so multi-block image attachments can advertise their chunk CIDs, not just the root file CID.
 - Added public IPFS attachment read retries in the Pages build so thread text and image bytes have the same slow-propagation tolerance.
 
+## 2026-07-02 Reply Discovery Slice
+
+- Added immutable reply CID hints to thread URLs as `replies=<replyCid,...>` so a shared link can render newer replies even when the base thread index CID is an older immutable snapshot.
+- Route loading now imports hinted reply CIDs from browser Helia or public IPFS, verifies that each hinted post belongs to the requested thread root, and then renders it in the thread tree.
+- Reply posting now merges the new reply CID into the current URL, so copying the active thread link carries the reply content dependency as well as the index and thread root.
+- Node-hosted live peer sessions now advertise thread-root CIDs in addition to thread-index CIDs.
+- The WebRTC data-channel protocol can request verified thread post records from a live peer; imported peer batches are CID-checked and rolled back if a record is invalid or belongs to another thread.
+
 ## Next Useful Work
 
 1. Deploy to a named target and attach durable storage or a volume for `/data`.
 2. Validate and harden public IPFS reachability for browser-authored Pages CIDs; if public provider announcement is not reliable enough, add a real public pinning or relay handoff that still keeps the thread surface P2P-first.
-3. Harden the live peer path with richer peer diagnostics, TURN/relay configuration for NAT-hostile networks, larger attachment transfer coverage, and automated browser coverage.
+3. Harden the live peer path with richer peer diagnostics, TURN/relay configuration for NAT-hostile networks, larger attachment transfer coverage, reply-sync browser automation, and automated browser coverage.
 4. Add moderation and trust controls before exposing a public writable instance.
 5. Preserve and display richer thread tree context, such as focused reply target anchors and collapsible subtrees.
 6. Add backup/restore tooling for `data/index.json`, server IPFS blocks, and browser board exports.

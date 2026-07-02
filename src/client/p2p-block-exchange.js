@@ -101,10 +101,15 @@ async function throttledSend(channel, payload) {
 }
 
 class BlockChannel {
-  constructor(channel, getBlockBytes, getFileBytes = null) {
+  constructor(channel, {
+    getBlockBytes,
+    getFileBytes = null,
+    getThreadRecords = null
+  }) {
     this.channel = channel
     this.getBlockBytes = getBlockBytes
     this.getFileBytes = getFileBytes
+    this.getThreadRecords = getThreadRecords
     this.pending = new Map()
     this.incoming = new Map()
     this.channel.addEventListener('message', event => {
@@ -118,6 +123,16 @@ class BlockChannel {
 
   async getFile(cid) {
     return this.getBytes('get-file', cid, `Timed out waiting for file ${cid}`)
+  }
+
+  async getThreadPosts(rootCid) {
+    await waitForOpen(this.channel)
+    const requestId = crypto.randomUUID()
+    const promise = new Promise((resolve, reject) => {
+      this.pending.set(requestId, { resolve, reject })
+    })
+    await throttledSend(this.channel, { type: 'get-thread-posts', requestId, rootCid })
+    return withTimeout(promise, BLOCK_TIMEOUT_MS, `Timed out waiting for thread posts ${rootCid}`)
   }
 
   async getBytes(type, cid, timeoutMessage) {
@@ -142,7 +157,25 @@ class BlockChannel {
       return
     }
 
-    if (message.type === 'missing-block' || message.type === 'missing-file') {
+    if (message.type === 'get-thread-posts') {
+      await this.sendThreadPosts(message.requestId, message.rootCid)
+      return
+    }
+
+    if (message.type === 'thread-posts') {
+      const pending = this.pending.get(message.requestId)
+      if (pending) {
+        this.pending.delete(message.requestId)
+        pending.resolve(message.posts || [])
+      }
+      return
+    }
+
+    if (
+      message.type === 'missing-block' ||
+      message.type === 'missing-file' ||
+      message.type === 'missing-thread-posts'
+    ) {
       const pending = this.pending.get(message.requestId)
       if (pending) {
         this.pending.delete(message.requestId)
@@ -223,13 +256,41 @@ class BlockChannel {
       })
     }
   }
+
+  async sendThreadPosts(requestId, rootCid) {
+    try {
+      if (!this.getThreadRecords) {
+        throw new Error('Peer cannot serve thread records')
+      }
+      const posts = await this.getThreadRecords(rootCid)
+      await throttledSend(this.channel, {
+        type: 'thread-posts',
+        requestId,
+        rootCid,
+        posts
+      })
+    } catch (err) {
+      await throttledSend(this.channel, {
+        type: 'missing-thread-posts',
+        requestId,
+        cid: rootCid,
+        error: err.message
+      })
+    }
+  }
 }
 
 export class P2PBlockExchange {
-  constructor({ getBlockBytes, getFileBytes = null, onStatus = () => {} }) {
+  constructor({
+    getBlockBytes,
+    getFileBytes = null,
+    getThreadRecords = null,
+    onStatus = () => {}
+  }) {
     this.peerId = getPeerId()
     this.getBlockBytes = getBlockBytes
     this.getFileBytes = getFileBytes
+    this.getThreadRecords = getThreadRecords
     this.onStatus = onStatus
     this.events = null
     this.readyPromise = null
@@ -290,7 +351,11 @@ export class P2PBlockExchange {
 
     const peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS })
     const dataChannel = peerConnection.createDataChannel('ipfschan-blocks', { ordered: true })
-    const blockChannel = new BlockChannel(dataChannel, this.getBlockBytes, this.getFileBytes)
+    const blockChannel = new BlockChannel(dataChannel, {
+      getBlockBytes: this.getBlockBytes,
+      getFileBytes: this.getFileBytes,
+      getThreadRecords: this.getThreadRecords
+    })
     const answerPromise = new Promise((resolve, reject) => {
       this.pendingAnswers.set(provider.peerId, { peerConnection, resolve, reject })
     })
@@ -322,6 +387,14 @@ export class P2PBlockExchange {
 
   async fetchFileFromOpenPeers(cid) {
     return this.fetchFromOpenPeers(cid, connection => connection.channel.getFile(cid), 'No open P2P file channels')
+  }
+
+  async fetchThreadPostsFromOpenPeers(rootCid) {
+    return this.fetchFromOpenPeers(
+      rootCid,
+      connection => connection.channel.getThreadPosts(rootCid),
+      'No open P2P thread channels'
+    )
   }
 
   async fetchFromOpenPeers(cid, fetcher, emptyMessage) {
@@ -362,7 +435,11 @@ export class P2PBlockExchange {
     })
 
     peerConnection.addEventListener('datachannel', event => {
-      const blockChannel = new BlockChannel(event.channel, this.getBlockBytes, this.getFileBytes)
+      const blockChannel = new BlockChannel(event.channel, {
+        getBlockBytes: this.getBlockBytes,
+        getFileBytes: this.getFileBytes,
+        getThreadRecords: this.getThreadRecords
+      })
       this.connections.set(message.from, { peerConnection, channel: blockChannel })
     })
 

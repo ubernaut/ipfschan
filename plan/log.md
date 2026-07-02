@@ -1077,3 +1077,87 @@ Failures and pivots:
 Open questions and caveats:
 
 - The actual `git push` happens after this log entry is committed.
+
+## 2026-07-02 10:43:16 AKDT
+
+Prompt at 2026-07-02 10:31:02 AKDT: "images seem to work now but I don't think replies are propagating or being discovered correctly."
+
+Prompt at 2026-07-02 10:43:16 AKDT: "ok proceed."
+
+Actions attempted:
+
+- Kept the prompt-provided AGENTS instructions in context and resumed from the paused partial reply-discovery implementation.
+- Re-read `plan/plan.md` and recent `plan/log.md` before continuing.
+- Used the ICC skill; the repo index was current at `56faedc`, so no pre-edit ICC refresh was needed.
+- Diagnosed the core reply issue as an immutable index problem: posting a reply publishes a new index CID, but old thread links have no forward pointer to the new reply unless the reply CID is explicitly shared or discovered through live peers.
+- Added route-state helpers for parsing, merging, and serializing reply CID hints.
+- Added `replies=<replyCid,...>` support to thread URLs:
+  - reply posting merges the new reply CID into the current URL,
+  - copied thread links preserve reply hints,
+  - opening an older index URL with reply hints imports those reply post CIDs before rendering,
+  - old singular `reply=` query params are accepted and canonicalized into `replies=`.
+- Added P2P post import helpers that read individual post DAG-JSON CIDs from browser Helia or, in Pages mode, retry public IPFS before failing.
+- Added thread-root validation for imported reply CIDs so a hinted post cannot be displayed under a different thread.
+- Extended the Node-hosted WebRTC data-channel protocol:
+  - open peers now advertise both thread-index CIDs and thread-root CIDs,
+  - peers can request the current post records for a thread root,
+  - received peer records are re-added through DAG-JSON so the claimed CID is verified,
+  - invalid peer batches roll back newly imported records.
+- Added a thread-scoped live reply sync loop for Node-hosted mode. While a thread is open, the client periodically asks live peers advertising the thread root for current post records and updates the URL with any newly discovered reply CIDs.
+- Updated README, `plan/plan.md`, and `plan/tests.md` to document immutable reply hints, live-peer reply sync, and the remaining Pages/public-IPFS limitation.
+- Regenerated the normal production build and the GitHub Pages `docs/` build.
+- Ran a local two-profile headless Chrome probe against a temporary Node-hosted app:
+  - profile A created a thread,
+  - profile B loaded the original one-post thread URL,
+  - profile A posted a reply and gained a `replies=` URL hint,
+  - profile B, still on the older index URL, discovered the reply from the live peer, rendered two posts, and updated its own URL with `replies=`.
+- Shut down the temporary app, Chrome sessions, and temp profiles from the browser probe.
+
+Files touched:
+
+- `README.md`
+- `docs/index.html`
+- `docs/assets/*`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+- `src/client/__tests__/decentralized-board.test.js`
+- `src/client/__tests__/route-state.test.js`
+- `src/client/decentralized-board.js`
+- `src/client/main.js`
+- `src/client/p2p-block-exchange.js`
+- `src/client/route-state.js`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-02 10:43:16 AKDT` for the resume prompt and `2026-07-02 10:49:02 AKDT` before this log update.
+- `sed -n '1,220p' /home/cos/.codex/skills/icc/SKILL.md`: reviewed ICC instructions.
+- `sed -n '1,260p' plan/plan.md` and `tail -n 180 plan/log.md`: reviewed current plan/log context.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py status --repo ipfschan --check-staleness`: reported the ICC index current at `56faedcfd3eced5113ead2fd3acadf917b13e6c6`.
+- `node --version && npm --version`: confirmed Node `v24.17.0` and npm `11.13.0`.
+- `git status --short --branch`: initially showed `## main...origin/main` with the paused source edits uncommitted.
+- `node --check src/client/main.js`, `node --check src/client/decentralized-board.js`, `node --check src/client/p2p-block-exchange.js`, and `node --check src/client/route-state.js`: passed.
+- `npm test -- --run src/client/__tests__/route-state.test.js src/client/__tests__/decentralized-board.test.js src/client/__tests__/peer-blockstore.test.js`: passed with 3 files and 14 tests after the peer-import safeguards.
+- `npm test`: passed with 7 files and 30 tests.
+- `npm run build`: passed; final normal build asset included `dist/assets/index-D4Jl-iIi.js`. Vite still warned about the large Helia/libp2p chunk.
+- `npm run build:pages`: passed; final Pages build asset included `docs/assets/index-CaXcuInx.js`. Vite still warned about the large Helia/libp2p chunk.
+- `npm run smoke`: passed twice during the work; final run passed at `http://127.0.0.1:34829`.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan && EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed ICC after the final source and docs changes; 100 files were indexed and 218 memory chunks were built.
+- `git diff --check`: passed.
+- Local two-profile headless Chrome reply propagation probe:
+  - started a temporary Node-hosted app at `http://127.0.0.1:40015/`,
+  - profile A created thread CID `baguqeeraxqk56fqqrbvoxc7plyctyzlecwbdnqvr6bhavkqly6f4dtznfqxa`,
+  - profile B loaded the original URL with index CID `baguqeeramjcdis2rku7x44xedsnajttozbkmsvycp3dlpyjqvegbxccfyenq`,
+  - profile A posted reply CID `baguqeerahojojbzr5snmvilsgefu3y7eh2i4ixzv35ja4roe5ufccn5kiwda` and the URL changed to include `replies=baguqeerahojojbzr5snmvilsgefu3y7eh2i4ixzv35ja4roe5ufccn5kiwda`,
+  - profile B remained on the older index CID but live-synced the reply, rendered two posts, displayed `loaded 1 live peer reply hint(s)`, and updated its URL with the same `replies=` hint.
+- `ps -eo pid,ppid,cmd | rg 'ipfschan-reply|remote-debugging-port=933|ipfschan-smoke|127\\.0\\.0\\.1:40015|node --input-type=module|vite|google-chrome --headless' || true`: found no remaining ipfschan reply probe, smoke server, headless Chrome, or inline Node process. Existing Vite processes under `/home/cos/projects/ulg` were unrelated and left running.
+
+Failures and pivots:
+
+- The first partial live-peer design only synced replies once when opening a thread. Before running the browser probe, that was tightened into a thread-scoped polling loop so already-open threads can discover new live replies without requiring a reload.
+- The peer record import initially could leave partial new records if a later record in the same peer batch failed validation. It now rolls back newly imported records from that batch before rethrowing.
+
+Open questions and caveats:
+
+- GitHub Pages has no app-owned WebRTC signaling helper, so live peer thread-root sync is Node-hosted only. Pages sharing depends on public IPFS reachability plus the explicit `replies=` hints in copied URLs.
+- This does not create a global mutable namespace for old immutable index CIDs. A reader with only an old index URL and no live peer or reply hints still has no reliable way to discover replies created after that index snapshot.
