@@ -31,7 +31,7 @@ export function emptyBoard({ previousBoardCid = null } = {}) {
 
 export function normalizeBoard(board) {
   if (!board || typeof board !== 'object' || board.type !== BOARD_TYPE) {
-    throw new Error('Unsupported board CID')
+    throw new Error('Unsupported thread index CID')
   }
   return {
     ...board,

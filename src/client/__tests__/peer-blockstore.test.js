@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   collect,
+  collectLinkedBlockCids,
   createPeerBackedBlockstore
 } from '../decentralized-board.js'
+import * as dagPb from '@ipld/dag-pb'
+import { CID } from 'multiformats/cid'
+import * as raw from 'multiformats/codecs/raw'
+import { sha256 } from 'multiformats/hashes/sha2'
 
 function cid(value) {
   return {
@@ -88,5 +93,28 @@ describe('peer-backed blockstore', () => {
 
     expect([...await collect(blockstore.get(cid('late-miss')))]).toEqual([4, 3, 2, 1])
     expect([...blocks.get('late-miss')]).toEqual([4, 3, 2, 1])
+  })
+
+  it('walks DAG-PB links when collecting attachment block CIDs', async () => {
+    const leafA = CID.create(1, raw.code, await sha256.digest(new Uint8Array([1, 2, 3])))
+    const leafB = CID.create(1, raw.code, await sha256.digest(new Uint8Array([4, 5, 6])))
+    const rootBytes = dagPb.encode({
+      Data: new Uint8Array(),
+      Links: [
+        { Hash: leafA, Name: '0', Tsize: 3 },
+        { Hash: leafB, Name: '1', Tsize: 3 },
+        { Hash: leafA, Name: 'again', Tsize: 3 }
+      ]
+    })
+    const root = CID.create(1, dagPb.code, await sha256.digest(rootBytes))
+    const blockstore = memoryBlockstore({
+      [root.toString()]: rootBytes
+    })
+
+    await expect(collectLinkedBlockCids(blockstore, root)).resolves.toEqual([
+      root.toString(),
+      leafA.toString(),
+      leafB.toString()
+    ])
   })
 })

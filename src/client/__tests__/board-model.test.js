@@ -108,6 +108,6 @@ describe('browser board model', () => {
 
     expect(board.type).toBe(BOARD_TYPE)
     expect(board.posts).toEqual(['root-a', 'reply-a-1'])
-    expect(() => normalizeBoard({ type: 'wrong-board/v1' })).toThrow('Unsupported board CID')
+    expect(() => normalizeBoard({ type: 'wrong-board/v1' })).toThrow('Unsupported thread index CID')
   })
 })

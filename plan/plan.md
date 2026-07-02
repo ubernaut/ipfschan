@@ -7,7 +7,7 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Keep the implementation in ES modules with Express for the API, Helia for IPFS, and Vite for the client.
 - Keep the server offline by default so local development and tests do not depend on network interfaces.
 - Treat IPFS CIDs as the authority for post and attachment content, with `data/index.json` as a derived local discovery index.
-- Treat the browser P2P board as the only client board surface; the Node process may host static assets, signaling, and a verified mirror, but not a selectable server-backed board mode.
+- Treat the browser P2P thread index as the internal discovery manifest for tags, threads, and replies; keep "boards" out of the user-facing workflow.
 - Treat GitHub Pages as a serverless P2P build: it must not call app-owned `/api` helpers, but it should use Helia's public browser IPFS networking for delegated routing, Bitswap/WebRTC transport, and trustless gateway retrieval.
 - Render the client in a retro terminal style with no React or TypeScript.
 - Prefer headless tests for repository, IPFS, and API behavior before adding demos.
@@ -138,10 +138,20 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Pages board loads wait on the public node, then retry abortable Helia retrieval attempts through public routing, Bitswap/WebRTC, and trustless gateways before reporting that a board CID is unreachable.
 - Pages publishes launch bounded public provider announcements for the board, post, and attachment CIDs in the background and report pending, complete, or incomplete announcement state in the terminal status line.
 
+## 2026-07-02 Threads/Tags UX and Attachment Reachability
+
+- Reframed the visible client model around threads, tags, and a thread index CID instead of boards.
+- New links use `?index=<indexCid>&tag=<tag>&thread=<rootCid>` while old `?board=<cid>` links still load.
+- Added a blocking terminal-style progress dialog for initial tag/thread loading with `i/j completed queries` messaging.
+- Added a blocking posting dialog that keeps the user on the page while public IPFS availability advertisement completes or reports a warning.
+- Stopped first-load startup from publishing an empty manifest; a thread index CID is created when the first real thread is posted.
+- Added attachment DAG CID collection so multi-block image attachments can advertise their chunk CIDs, not just the root file CID.
+- Added public IPFS attachment read retries in the Pages build so thread text and image bytes have the same slow-propagation tolerance.
+
 ## Next Useful Work
 
 1. Deploy to a named target and attach durable storage or a volume for `/data`.
-2. Validate and harden public IPFS reachability for browser-authored Pages CIDs; if public provider announcement is not reliable enough, add a real public pinning or relay handoff that still keeps the board surface P2P-first.
+2. Validate and harden public IPFS reachability for browser-authored Pages CIDs; if public provider announcement is not reliable enough, add a real public pinning or relay handoff that still keeps the thread surface P2P-first.
 3. Harden the live peer path with richer peer diagnostics, TURN/relay configuration for NAT-hostile networks, larger attachment transfer coverage, and automated browser coverage.
 4. Add moderation and trust controls before exposing a public writable instance.
 5. Preserve and display richer thread tree context, such as focused reply target anchors and collapsible subtrees.

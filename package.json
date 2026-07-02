@@ -27,6 +27,7 @@
     "@helia/block-brokers": "^5.2.4",
     "@helia/dag-json": "^5.1.1",
     "@helia/unixfs": "^7.2.1",
+    "@ipld/dag-pb": "^4.1.7",
     "@libp2p/noise": "^1.0.1",
     "@libp2p/tcp": "^11.0.22",
     "@libp2p/websockets": "^10.1.15",

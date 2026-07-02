@@ -20,8 +20,11 @@ const PUBLIC_NETWORK_START_TIMEOUT_MS = 20000
 const PUBLIC_LOAD_TIMEOUT_MS = 360000
 const PUBLIC_LOAD_ATTEMPT_TIMEOUT_MS = 45000
 const PUBLIC_LOAD_RETRY_DELAY_MS = 3000
+const PUBLIC_ATTACHMENT_LOAD_TIMEOUT_MS = 240000
+const PUBLIC_ATTACHMENT_ATTEMPT_TIMEOUT_MS = 45000
+const PUBLIC_ATTACHMENT_RETRY_DELAY_MS = 3000
 const PUBLIC_PROVIDE_TIMEOUT_MS = 180000
-const PAGES_BUILD = import.meta.env.MODE === 'pages'
+const PAGES_BUILD = import.meta.env?.MODE === 'pages'
 
 export async function collect(source) {
   const resolved = typeof source?.then === 'function' ? await source : source
@@ -75,6 +78,40 @@ export function createPeerBackedBlockstore(baseBlockstore, fetchBlockBytes, onPe
       return typeof value === 'function' ? value.bind(target) : value
     }
   })
+}
+
+export async function collectLinkedBlockCids(blockstore, rootCidInput) {
+  const [
+    { CID },
+    dagPb
+  ] = await Promise.all([
+    import('multiformats/cid'),
+    import('@ipld/dag-pb')
+  ])
+  const rootCid = typeof rootCidInput === 'string'
+    ? CID.parse(rootCidInput)
+    : rootCidInput
+  const seen = new Set()
+  const cids = []
+
+  const visit = async cid => {
+    const cidString = cid.toString()
+    if (seen.has(cidString)) return
+    seen.add(cidString)
+    cids.push(cidString)
+
+    if (cid.code !== dagPb.code) return
+    const bytes = await collect(blockstore.get(cid))
+    const node = dagPb.decode(bytes)
+    for (const link of node.Links || []) {
+      if (link.Hash) {
+        await visit(link.Hash)
+      }
+    }
+  }
+
+  await visit(rootCid)
+  return cids
 }
 
 function withTimeout(promise, ms, message) {
@@ -236,12 +273,31 @@ export class DecentralizedBoard {
     }))
   }
 
+  notifyOperationProgress(detail) {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent('ipfschan:operation-progress', {
+      detail
+    }))
+  }
+
   async newBoard() {
     await this.init()
     this.board = emptyBoard({ previousBoardCid: this.boardCid })
     this.boardCid = null
     this.posts = []
     return this.publish()
+  }
+
+  async resetLocalThreads() {
+    await this.init()
+    this.board = emptyBoard({ previousBoardCid: this.boardCid })
+    this.boardCid = null
+    this.posts = []
+    this.lastLoadSource = 'local'
+    this.lastPublicProvide = null
+    this.lastPublicProvideError = null
+    localStorage.removeItem(BOARD_STORAGE_KEY)
+    return null
   }
 
   async load(boardCid) {
@@ -269,7 +325,7 @@ export class DecentralizedBoard {
       } catch (err) {
         this.lastLoadSource = 'public'
         const reason = this.publicNetworkError?.message || err.message
-        throw new Error(`Board CID is not reachable through public IPFS: ${reason}`)
+        throw new Error(`Thread index CID is not reachable through public IPFS: ${reason}`)
       }
     }
 
@@ -293,7 +349,7 @@ export class DecentralizedBoard {
       await withTimeout(
         this.loadFromHelia(normalizedBoardCid),
         LOAD_TIMEOUT_MS,
-        'Board blocks are not reachable from this browser yet'
+        'Thread and tag blocks are not reachable from this browser yet'
       )
       return this.boardCid
     } catch (err) {
@@ -334,7 +390,7 @@ export class DecentralizedBoard {
         return await withAbortableTimeout(
           signal => this.loadFromHelia(boardCid, { signal }),
           Math.min(PUBLIC_LOAD_ATTEMPT_TIMEOUT_MS, remaining),
-          'Board blocks are not reachable from public IPFS yet'
+          'Thread and tag blocks are not reachable from public IPFS yet'
         )
       } catch (err) {
         lastErr = err
@@ -343,19 +399,40 @@ export class DecentralizedBoard {
       }
     }
 
-    throw lastErr || new Error('Board blocks are not reachable from public IPFS yet')
+    throw lastErr || new Error('Thread and tag blocks are not reachable from public IPFS yet')
   }
 
   async loadFromHelia(boardCid, options = {}) {
     const { CID } = await import('multiformats/cid')
     this.boardCid = CID.parse(boardCid).toString()
+    this.notifyOperationProgress({
+      kind: 'load',
+      completed: 0,
+      total: 1,
+      message: 'updating tags and threads'
+    })
     this.board = normalizeBoard(await this.dag.get(CID.parse(this.boardCid), options))
     this.posts = []
+    const total = 1 + this.board.posts.length
+    this.notifyOperationProgress({
+      kind: 'load',
+      completed: 1,
+      total,
+      message: 'updating tags and threads'
+    })
 
-    for (const postCid of this.board.posts) {
+    for (let index = 0; index < this.board.posts.length; index += 1) {
+      const postCid = this.board.posts[index]
       const cid = CID.parse(postCid)
       const post = await this.dag.get(cid, options)
       this.posts.push(postRecordFromPayload(cid.toString(), post))
+      this.notifyOperationProgress({
+        kind: 'load',
+        completed: index + 2,
+        total,
+        message: 'updating tags and threads',
+        cid: postCid
+      })
     }
 
     localStorage.setItem(BOARD_STORAGE_KEY, this.boardCid)
@@ -391,7 +468,12 @@ export class DecentralizedBoard {
           await this.putBlockBytes(postCid, postBytes)
           const post = await this.dag.get(CID.parse(postCid))
           if (post.attachment?.cid) {
-            attachmentCids.add(post.attachment.cid)
+            const blockCids = Array.isArray(post.attachment.blocks) && post.attachment.blocks.length
+              ? post.attachment.blocks
+              : [post.attachment.cid]
+            for (const attachmentCid of blockCids) {
+              attachmentCids.add(attachmentCid)
+            }
           }
         }
 
@@ -531,11 +613,18 @@ export class DecentralizedBoard {
     if (!file || !file.size) return null
     const bytes = new Uint8Array(await file.arrayBuffer())
     const cid = await this.files.addBytes(bytes)
+    let blocks = [cid.toString()]
+    try {
+      blocks = await collectLinkedBlockCids(this.helia.blockstore, cid)
+    } catch (err) {
+      this.lastPeerError = err
+    }
     return {
       cid: cid.toString(),
       name: file.name,
       mime: file.type || 'application/octet-stream',
-      size: file.size
+      size: file.size,
+      blocks
     }
   }
 
@@ -561,6 +650,17 @@ export class DecentralizedBoard {
       return URL.createObjectURL(blob)
     } catch (err) {
       this.lastPeerError = err
+      if (this.serverless && this.publicNetwork) {
+        try {
+          const bytes = await this.readAttachmentBytesFromPublicIpfs(attachment.cid)
+          const blob = new Blob([bytes], { type: attachment.mime || 'application/octet-stream' })
+          return URL.createObjectURL(blob)
+        } catch (publicErr) {
+          this.lastPeerError = publicErr
+          throw new Error(`Attachment is not reachable through public IPFS yet: ${publicErr.message}`)
+        }
+      }
+
       if (!this.blockExchange) {
         throw new Error('Attachment is not reachable through public IPFS yet')
       }
@@ -581,6 +681,35 @@ export class DecentralizedBoard {
       const suffix = params.toString() ? `?${params}` : ''
       return `/api/p2p/file/${encodeURIComponent(attachment.cid)}${suffix}`
     }
+  }
+
+  async readAttachmentBytesFromPublicIpfs(cidStr) {
+    const { CID } = await import('multiformats/cid')
+    const cid = CID.parse(cidStr)
+    try {
+      await this.waitForPublicNetwork()
+    } catch (err) {
+      this.publicNetworkError = err
+    }
+
+    const deadline = Date.now() + PUBLIC_ATTACHMENT_LOAD_TIMEOUT_MS
+    let lastErr = null
+    while (Date.now() < deadline) {
+      const remaining = deadline - Date.now()
+      try {
+        return await withAbortableTimeout(
+          signal => collect(this.files.cat(cid, { signal })),
+          Math.min(PUBLIC_ATTACHMENT_ATTEMPT_TIMEOUT_MS, remaining),
+          'Attachment bytes are not reachable from public IPFS yet'
+        )
+      } catch (err) {
+        lastErr = err
+        if (Date.now() >= deadline) break
+        await sleep(Math.min(PUBLIC_ATTACHMENT_RETRY_DELAY_MS, deadline - Date.now()))
+      }
+    }
+
+    throw lastErr || new Error('Attachment bytes are not reachable from public IPFS yet')
   }
 
   async announceProvider() {
@@ -611,7 +740,14 @@ export class DecentralizedBoard {
     if (this.boardCid) cids.add(this.boardCid)
     for (const post of this.posts) {
       if (post.cid) cids.add(post.cid)
-      if (post.attachment?.cid) cids.add(post.attachment.cid)
+      if (post.attachment?.cid) {
+        const attachmentCids = Array.isArray(post.attachment.blocks) && post.attachment.blocks.length
+          ? post.attachment.blocks
+          : [post.attachment.cid]
+        for (const attachmentCid of attachmentCids) {
+          cids.add(attachmentCid)
+        }
+      }
     }
     return [...cids]
   }
@@ -633,6 +769,13 @@ export class DecentralizedBoard {
       startedAt: new Date().toISOString()
     }
     this.notifyPublicAnnounce()
+    this.notifyOperationProgress({
+      kind: 'announce',
+      completed: 0,
+      total: cids.length,
+      message: 'advertising thread availability to public IPFS',
+      keepOpen: true
+    })
 
     this.publicAnnouncePromise = this.announcePublicCids(cids, token)
       .catch(err => {
@@ -664,17 +807,43 @@ export class DecentralizedBoard {
     if (!this.publicNetwork || !this.boardCid) return null
 
     const startedAt = this.lastPublicProvide?.startedAt || new Date().toISOString()
+    let completed = 0
+    let providedCount = 0
+    const errors = []
     const results = await Promise.all(cids.map(async cid => {
       try {
-        return { cid, provided: await this.provideCid(cid) }
+        const provided = await this.provideCid(cid)
+        providedCount += provided ? 1 : 0
+        return { cid, provided }
       } catch (err) {
+        errors.push(`${cid}: ${err.message}`)
         return { cid, error: err }
+      } finally {
+        completed += 1
+        if (token === this.publicAnnounceToken) {
+          this.lastPublicProvide = {
+            attempted: cids.length,
+            provided: providedCount,
+            errors: [...errors],
+            pending: completed < cids.length,
+            token,
+            startedAt
+          }
+          this.notifyPublicAnnounce()
+          this.notifyOperationProgress({
+            kind: 'announce',
+            completed,
+            total: cids.length,
+            message: 'advertising thread availability to public IPFS',
+            keepOpen: completed < cids.length
+          })
+        }
       }
     }))
     const provided = results
       .map(result => result.provided)
       .filter(Boolean)
-    const errors = results
+    const finalErrors = results
       .filter(result => result.error)
       .map(result => `${result.cid}: ${result.error.message}`)
 
@@ -683,16 +852,16 @@ export class DecentralizedBoard {
     }
 
     this.lastPublicProvide = {
-      attempted: provided.length + errors.length,
+      attempted: provided.length + finalErrors.length,
       provided: provided.filter(Boolean).length,
-      errors,
+      errors: finalErrors,
       pending: false,
       token,
       startedAt,
       finishedAt: new Date().toISOString()
     }
-    this.lastPublicProvideError = errors.length
-      ? new Error(errors.join('; '))
+    this.lastPublicProvideError = finalErrors.length
+      ? new Error(finalErrors.join('; '))
       : null
     return this.lastPublicProvide
   }

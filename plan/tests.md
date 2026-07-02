@@ -22,8 +22,8 @@ Use headless validation first. Keep tests executable through `npm test` and avoi
   - P2P board mirror upload, board snapshot retrieval, and mirrored file streaming.
   - P2P signaling provider registration, provider lookup, and message forwarding.
 - `src/client/__tests__/board-model.test.js`
-  - Browser board tag normalization.
-  - P2P board tag counts.
+  - Browser thread-index tag normalization.
+  - P2P thread-index tag counts.
   - P2P thread summaries sorted by last activity.
   - Parent-before-child thread trees with depth and reply counts.
   - Board manifest type validation and post CID de-duplication.
@@ -32,6 +32,7 @@ Use headless validation first. Keep tests executable through `npm test` and avoi
   - Peer-backed blockstore prefers local blocks.
   - Peer-backed blockstore fetches missing blocks from an open peer and caches them locally.
   - Peer-backed blockstore handles async-iterator read failures by fetching from a peer.
+  - Attachment DAG CID collection follows DAG-PB links and de-duplicates repeated block CIDs.
 - `scripts/smoke.js`
   - Starts the real app on an ephemeral local port.
   - Checks the built app shell, health route, create thread, reply, tags, thread tree, attachment streaming, reset, and shutdown.
@@ -63,16 +64,17 @@ Use headless validation first. Keep tests executable through `npm test` and avoi
 - For GitHub Pages changes, run `npm run build:pages` and serve the repo behind an `/ipfschan/` path to confirm assets and serverless P2P startup work.
 - For layout/style changes, capture desktop and mobile headless Chrome screenshots against the live or local built app and inspect them for wrapping, overlap, scrollability, and visual hierarchy.
 - For URL-routing changes, use a browser/headless browser against a live URL with `?tag=<tag>&thread=<rootCid>` and confirm the active tag, thread card, copy-link button, and posts render.
-- For P2P board changes, use a browser/headless browser over HTTPS, create a P2P thread, reply to it, and confirm:
-  - the browser reports a board CID,
-  - the URL includes `board`, `tag`, and `thread`,
-  - replying changes the board CID while preserving the thread root,
+- For P2P thread-index changes, use a browser/headless browser over HTTPS, create a P2P thread, reply to it, and confirm:
+  - the browser reports a thread index CID after the first real thread,
+  - new URLs include `index`, `tag`, and `thread` while old `board` links still load,
+  - replying changes the index CID while preserving the thread root,
   - the thread link matches the current URL state.
-- For P2P sharing changes on the Node-hosted app, use two separate browser profiles. Profile A should create a P2P thread and show `board published and mirrored`; profile B should open the copied URL with clean IndexedDB/localStorage and show `board ready from availability mirror` plus the thread content.
-- For GitHub Pages/serverless sharing changes, use two separate browser profiles against the Pages URL. Profile A should create a P2P thread and report a public IPFS announce attempt. Profile B should open the copied URL with clean IndexedDB/localStorage and either show `board ready from public IPFS` plus the thread content, or record the public reachability failure text if public provider announcement/gateway retrieval is still not sufficient.
-- For P2P attachment sharing changes, create a P2P thread with an attachment, load the copied board URL in a fresh profile, and verify `/api/p2p/file/<cid>` streams the mirrored bytes.
-- For live peer changes, keep profile A open after creating the P2P thread. Profile B should load the copied URL with clean storage and show `board ready from live peer`.
-- For live peer attachment changes, keep profile A open after creating an attachment thread. Profile B should load the board from the live peer and the attachment link should become a `blob:` URL rather than `/api/p2p/file/...`; if it falls back to `/api/p2p/file/...`, the server mirror is still doing the attachment work.
+- For load/post UX changes, confirm the modal appears during initial tag/thread loading and during posting, shows `i/j completed queries` or availability advertisement progress, and disappears only after the relevant operation completes or reports a warning.
+- For P2P sharing changes on the Node-hosted app, use two separate browser profiles. Profile A should create a P2P thread and show the thread index was updated and mirrored; profile B should open the copied URL with clean IndexedDB/localStorage and show `threads and tags ready from availability mirror` plus the thread content.
+- For GitHub Pages/serverless sharing changes, use two separate browser profiles against the Pages URL. Profile A should create a P2P thread and complete or warn on the public IPFS availability advertisement. Profile B should open the copied URL with clean IndexedDB/localStorage and either show `threads and tags ready from public IPFS` plus the thread content, or record the public reachability failure text if public provider announcement/gateway retrieval is still not sufficient.
+- For P2P attachment sharing changes, create a P2P thread with an attachment, load the copied index URL in a fresh profile, and verify image attachments render from browser/public IPFS when possible or `/api/p2p/file/<cid>` streams the mirrored bytes in Node-hosted mode.
+- For live peer changes, keep profile A open after creating the P2P thread. Profile B should load the copied URL with clean storage and show `threads and tags ready from live peer`.
+- For live peer attachment changes, keep profile A open after creating an attachment thread. Profile B should load the index from the live peer and the attachment link should become a `blob:` URL rather than `/api/p2p/file/...`; if it falls back to `/api/p2p/file/...`, the server mirror is still doing the attachment work.
 - For server changes that affect runtime lifecycle, start the server on a non-conflicting port, exercise one request path, then shut it down.
 - For deploy changes, validate the Docker image with `/api/health` and stop the disposable container afterward.
 - Do not leave dev servers or test terminals running.

@@ -4,24 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ipfschan</title>
-    <script type="module" crossorigin src="/ipfschan/assets/index-A60MbL94.js"></script>
-    <link rel="stylesheet" crossorigin href="/ipfschan/assets/index-B9UOPzMS.css">
+    <script type="module" crossorigin src="/ipfschan/assets/index-DQo40hWx.js"></script>
+    <link rel="stylesheet" crossorigin href="/ipfschan/assets/index-H4TR5MWn.css">
   </head>
   <body>
     <div id="app">
       <header class="terminal-header">
         <div class="brand-lockup">
-          <p class="prompt-line">cos@ipfschan:~$ ./board</p>
+          <p class="prompt-line">cos@ipfschan:~$ ./threads</p>
           <h1>ipfschan</h1>
           <p class="subtitle">IPFS-hosted threads and replies</p>
         </div>
-        <div class="readout-grid" aria-label="board state">
+        <div class="readout-grid" aria-label="thread state">
           <div class="readout">
             <span>mode</span>
             <strong id="mode-readout">P2P</strong>
           </div>
           <div class="readout">
-            <span>board</span>
+            <span>sync</span>
             <strong id="board-readout">browser local</strong>
           </div>
           <div class="readout">
@@ -40,26 +40,38 @@
         <div id="status" role="status" aria-live="polite"></div>
       </div>
 
+      <div id="operation-modal" class="operation-modal hidden" role="dialog" aria-modal="true" aria-labelledby="operation-title">
+        <div class="operation-dialog terminal-panel">
+          <p class="prompt-line" id="operation-kicker">sync</p>
+          <h2 id="operation-title">Updating tags and threads</h2>
+          <p id="operation-message" class="operation-message">Preparing browser IPFS.</p>
+          <div class="operation-bar" aria-hidden="true">
+            <span id="operation-fill"></span>
+          </div>
+          <p id="operation-detail" class="cid-line"></p>
+        </div>
+      </div>
+
       <section id="p2p-board" class="terminal-panel">
         <div class="section-heading">
-          <h2>P2P Board</h2>
+          <h2>Sync</h2>
         </div>
         <div class="meter-line">
-          <span>peer sync</span>
+          <span>ipfs</span>
           <div id="p2p-status" role="status" aria-live="polite"></div>
         </div>
         <div class="board-actions">
-          <button id="new-p2p-board" class="secondary" type="button">New Board</button>
-          <button id="copy-board-link" class="secondary" type="button">Copy Board Link</button>
+          <button id="new-p2p-board" class="secondary" type="button">Start Fresh</button>
+          <button id="copy-board-link" class="secondary" type="button">Copy Tags Link</button>
         </div>
         <form id="load-board-form" class="inline-form">
           <label>
-            Board CID
+            Thread index CID
             <input type="text" name="boardCid" placeholder="bafy..." />
           </label>
-          <button type="submit">Load Board</button>
+          <button type="submit">Load</button>
         </form>
-        <p id="current-board" class="cid-line">Current board: browser local</p>
+        <p id="current-board" class="cid-line">Thread index: browser local</p>
       </section>
 
       <section id="tags-section" class="terminal-panel">

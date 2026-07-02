@@ -956,3 +956,95 @@ Open questions and caveats:
 
 - Public IPFS propagation is noticeably slower than the old app-owned mirror/signaling path. The current Pages path works without `/api`, but users should expect up to several minutes before a freshly copied board URL resolves in a clean browser.
 - The authoring tab still needs to remain online long enough for public provider announcement and retrieval. A future durable pinning or availability handoff could improve offline persistence without reintroducing a selectable server-backed board mode.
+
+## 2026-07-02 10:02:24 AKDT
+
+Prompt: "I think the concept of boards is clunky. we should just have threads and tags. when posting a thread or first loading a page it should be very obvious that you have to wait. maybe produce a modal dialog that says the action is happening. like \"updating tags and threads i/j completed queries\" when loading and when posting \"advertizing thread availability to k/l relays. you must keep this window open for someone to be able to use the thread\" also it looks like i can see other threads but the images aren't loading."
+
+Actions attempted:
+
+- Kept the user-provided AGENTS instructions in context. There is no `AGENTS.md` file on disk in this checkout, so the prompt-provided instructions were treated as the authority.
+- Re-read `plan/plan.md` and recent `plan/log.md` before editing.
+- Used the ICC skill and refreshed the stale `ipfschan` ICC index before relying on repo context.
+- Searched memory for the prior P2P image attachment failure mode; reused the warning that board/thread metadata can arrive while image bytes still fail or fall back.
+- Reframed the visible client surface around threads, tags, sync, and a thread index CID instead of boards:
+  - changed new generated URLs from `?board=<cid>` to `?index=<cid>`,
+  - kept old `?board=<cid>` links readable,
+  - removed visible "board" labels from the shell, status text, buttons, and user-facing error text,
+  - changed first load with no local index so it no longer publishes an empty manifest.
+- Added a terminal-style blocking progress modal:
+  - initial loads show `Updating tags and threads i/j completed queries`,
+  - posting shows `Advertising thread availability to k/l public IPFS relays. You must keep this window open for someone to be able to use the thread`,
+  - public advertisement progress events update the modal as individual CIDs complete.
+- Added `ipfschan:operation-progress` events from the browser Helia model for load and public advertisement progress.
+- Changed posting and reply submit handlers to keep the modal open until the current public advertisement promise completes or reports a warning.
+- Hardened image attachment availability:
+  - added direct `@ipld/dag-pb` dependency,
+  - added attachment DAG block CID collection so multi-block UnixFS images advertise root and chunk CIDs,
+  - included attachment block CIDs in public IPFS provider advertisement and live-peer prefetch,
+  - added Pages/serverless public IPFS attachment read retries before declaring an image unavailable.
+- Updated README, `plan/plan.md`, and `plan/tests.md` for the thread/tag/index UX, progress modal expectations, and attachment reachability tests.
+- Regenerated the normal production build and GitHub Pages `docs/` build.
+- Ran a local headless Chrome smoke against the generated Pages build under `/ipfschan/` and shut down the temporary server, browser, and profile inside the same command.
+
+Files touched:
+
+- `README.md`
+- `docs/index.html`
+- `docs/assets/*`
+- `package.json`
+- `package-lock.json`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+- `src/client/__tests__/board-model.test.js`
+- `src/client/__tests__/peer-blockstore.test.js`
+- `src/client/board-model.js`
+- `src/client/decentralized-board.js`
+- `src/client/index.html`
+- `src/client/main.js`
+- `src/client/styles.css`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-02 10:02:24 AKDT` for the prompt and `2026-07-02 10:17:10 AKDT` before this log update.
+- `sed -n '1,220p' /home/cos/.codex/skills/icc/SKILL.md`: reviewed ICC instructions.
+- `rg -n "ipfschan|p2p|image attachments|public IPFS|browser Helia|/api/p2p/file" /home/cos/.codex/memories/MEMORY.md`: found the prior P2P image attachment debugging memory.
+- `sed -n '1,220p' /home/cos/.codex/memories/rollout_summaries/2026-06-28T22-48-34-TsiN-ipfschan_p2p_image_attachment_bug_investigation.md`: reviewed the prior live-peer attachment failure summary.
+- `sed -n '1,260p' plan/plan.md` and `tail -n 240 plan/log.md`: reviewed current plan/log context.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py status --repo ipfschan --check-staleness`: reported the ICC index stale at `105d3cb` versus current `c0089af`.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: refreshed successfully with 95 files indexed.
+- `node --version && npm --version`: confirmed Node `v24.17.0` and npm `11.13.0`.
+- `npm view @ipld/dag-pb version`: returned `4.1.7`.
+- `npm install @ipld/dag-pb@^4.1.7`: added the direct dependency and audited 812 packages with zero vulnerabilities.
+- `node --input-type=module` Helia/UnixFS probes: confirmed multi-megabyte `addBytes` can produce DAG-PB roots with raw leaves and that walking DAG-PB links needs normalized block bytes from async-iterable blockstore reads.
+- `node --input-type=module` import probe for `src/client/decentralized-board.js`: initially failed because `import.meta.env.MODE` was assumed; the code was changed to `import.meta.env?.MODE`.
+- `node --check src/client/decentralized-board.js`, `node --check src/client/main.js`, and `node --check src/client/board-model.js`: passed after the final source edits.
+- First focused test run `npm test -- --run src/client/__tests__/peer-blockstore.test.js src/client/__tests__/board-model.test.js`: failed because the new DAG-PB test fixture used BigInt `Tsize` values; `@ipld/dag-pb` requires integer numbers there.
+- Retried focused test run after fixture fix: passed with 2 files and 10 tests.
+- `npm test`: passed with 5 files and 21 tests.
+- `npm run build`: passed; final normal build asset included `dist/assets/index-CUcYA-rN.js`. Vite still warned about the large Helia/libp2p chunk.
+- `npm run build:pages`: passed; final Pages build asset included `docs/assets/index-DQo40hWx.js`. Vite still warned about the large Helia/libp2p chunk.
+- Local headless Chrome Pages smoke:
+  - served `docs/` under `/ipfschan/` from a temporary Node HTTP server,
+  - loaded a fresh profile at `/ipfschan/?smoke=threads-tags-ui-final`,
+  - confirmed blank startup had no `index` or `board` URL parameter, the modal was hidden after load, readout labels were `mode|sync|tag|thread`, and status was `ready for a first thread`,
+  - submitted a new thread,
+  - confirmed the URL changed to `?index=<cid>&tag=smoke&thread=<cid>` with no `board` parameter,
+  - confirmed the posting modal stayed visible with `Advertising thread availability to 0/2 public IPFS relays. You must keep this window open for someone to be able to use the thread.`,
+  - confirmed the thread and post rendered,
+  - shut down the temporary Chrome process, profile, and HTTP server.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan && EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed ICC after the source changes; 97 files were indexed and 208 memory chunks were built.
+- `ps -eo pid,ppid,cmd | rg 'ipfschan-smoke|remote-debugging-port=9|127\\.0\\.0\\.1:.*ipfschan|node --input-type=module|vite|chrome --headless' || true`: found no remaining ipfschan smoke server, Chrome, or `node --input-type=module` test process. Existing Vite processes under `/home/cos/projects/ulg` were unrelated and left running.
+
+Failures and pivots:
+
+- The repo does not currently contain an `AGENTS.md` file even though the prompt provided AGENTS instructions; the prompt instructions were followed directly.
+- The first DAG-PB unit fixture used BigInt `Tsize` values and failed validation; changing them to integer numbers fixed the test.
+- The original first-load behavior published an empty manifest and produced a shareable CID before any real thread existed. That preserved the old board model too strongly, so it was changed to initialize an empty local thread list and wait until the first real thread to create an index CID.
+- The local browser smoke intentionally did not wait for public IPFS advertisement completion because that can take minutes; it verified that the modal remains visible during that wait and that the authoring tab is kept in the correct state.
+
+Open questions and caveats:
+
+- The image fix improves newly posted attachments by advertising the UnixFS DAG block CIDs and retrying public attachment reads, but it still needs a slow live two-profile Pages validation with an actual image attachment to prove public image retrieval under real propagation timing.
+- Existing older posts that do not have `attachment.blocks` metadata still advertise the attachment root CID only unless the local browser can traverse the attachment DAG.
