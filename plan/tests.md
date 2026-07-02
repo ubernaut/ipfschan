@@ -40,14 +40,14 @@ Use headless validation first. Keep tests executable through `npm test` and avoi
 
 - `npm test`
   - Runs all Vitest tests.
-  - Last run on 2026-07-01 during the P2P-only client slice: 5 files passed, 20 tests passed.
+  - Last run on 2026-07-01 during the public IPFS Pages slice: 5 files passed, 20 tests passed.
 - `npm run build`
   - Required after client or Vite changes.
-  - Last run on 2026-07-01 during the P2P-only client slice: passed; Vite still warns about the large Helia/libp2p chunk.
+  - Last run on 2026-07-01 during the public IPFS Pages slice: passed; Vite still warns about the large Helia/libp2p chunk.
 - `npm run build:pages`
   - Builds the GitHub Pages static bundle into `docs/` with `/ipfschan/` asset paths and `.nojekyll`.
   - Required after client changes when publishing Pages from the `docs/` folder.
-  - Last run on 2026-07-01 during the P2P-only client slice: passed; Vite still warns about the large Helia/libp2p chunk.
+  - Last run on 2026-07-01 during the public IPFS Pages slice: passed; Vite still warns about the large Helia/libp2p chunk.
 - `npm run smoke`
   - Starts and stops a real local app instance with temp storage.
 - `npm run verify`
@@ -60,7 +60,7 @@ Use headless validation first. Keep tests executable through `npm test` and avoi
 ## Manual/Smoke Checks
 
 - For UI-affecting changes, run `npm run build` at minimum.
-- For GitHub Pages changes, run `npm run build:pages` and serve the repo behind an `/ipfschan/` path to confirm assets and browser-local P2P startup work.
+- For GitHub Pages changes, run `npm run build:pages` and serve the repo behind an `/ipfschan/` path to confirm assets and serverless P2P startup work.
 - For layout/style changes, capture desktop and mobile headless Chrome screenshots against the live or local built app and inspect them for wrapping, overlap, scrollability, and visual hierarchy.
 - For URL-routing changes, use a browser/headless browser against a live URL with `?tag=<tag>&thread=<rootCid>` and confirm the active tag, thread card, copy-link button, and posts render.
 - For P2P board changes, use a browser/headless browser over HTTPS, create a P2P thread, reply to it, and confirm:
@@ -68,7 +68,8 @@ Use headless validation first. Keep tests executable through `npm test` and avoi
   - the URL includes `board`, `tag`, and `thread`,
   - replying changes the board CID while preserving the thread root,
   - the thread link matches the current URL state.
-- For P2P sharing changes, use two separate browser profiles. Profile A should create a P2P thread and show `board published and mirrored`; profile B should open the copied URL with clean IndexedDB/localStorage and show `board ready from availability mirror` plus the thread content.
+- For P2P sharing changes on the Node-hosted app, use two separate browser profiles. Profile A should create a P2P thread and show `board published and mirrored`; profile B should open the copied URL with clean IndexedDB/localStorage and show `board ready from availability mirror` plus the thread content.
+- For GitHub Pages/serverless sharing changes, use two separate browser profiles against the Pages URL. Profile A should create a P2P thread and report a public IPFS announce attempt. Profile B should open the copied URL with clean IndexedDB/localStorage and either show `board ready from public IPFS` plus the thread content, or record the public reachability failure text if public provider announcement/gateway retrieval is still not sufficient.
 - For P2P attachment sharing changes, create a P2P thread with an attachment, load the copied board URL in a fresh profile, and verify `/api/p2p/file/<cid>` streams the mirrored bytes.
 - For live peer changes, keep profile A open after creating the P2P thread. Profile B should load the copied URL with clean storage and show `board ready from live peer`.
 - For live peer attachment changes, keep profile A open after creating an attachment thread. Profile B should load the board from the live peer and the attachment link should become a `blob:` URL rather than `/api/p2p/file/...`; if it falls back to `/api/p2p/file/...`, the server mirror is still doing the attachment work.

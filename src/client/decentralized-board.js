@@ -16,6 +16,11 @@ import { P2PBlockExchange } from './p2p-block-exchange.js'
 
 const BOARD_STORAGE_KEY = 'ipfschan.p2p.boardCid'
 const LOAD_TIMEOUT_MS = 8000
+const PUBLIC_NETWORK_START_TIMEOUT_MS = 20000
+const PUBLIC_LOAD_TIMEOUT_MS = 180000
+const PUBLIC_LOAD_ATTEMPT_TIMEOUT_MS = 45000
+const PUBLIC_LOAD_RETRY_DELAY_MS = 3000
+const PUBLIC_PROVIDE_TIMEOUT_MS = 180000
 const PAGES_BUILD = import.meta.env.MODE === 'pages'
 
 export async function collect(source) {
@@ -83,6 +88,26 @@ function withTimeout(promise, ms, message) {
   })
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function withAbortableTimeout(task, ms, message) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(new Error(message)), ms)
+
+  try {
+    return await task(controller.signal)
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(message, { cause: err })
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 async function fetchJSON(url, options = {}) {
   const res = await fetch(url, options)
   if (!res.ok) {
@@ -106,7 +131,15 @@ export class DecentralizedBoard {
     this.lastLoadSource = 'local'
     this.blockExchange = null
     this.peerFiles = null
-    this.browserOnly = PAGES_BUILD
+    this.serverless = PAGES_BUILD
+    this.publicNetwork = PAGES_BUILD
+    this.publicNetworkReady = null
+    this.publicNetworkStatus = PAGES_BUILD ? 'idle' : 'disabled'
+    this.publicNetworkError = null
+    this.lastPublicProvide = null
+    this.lastPublicProvideError = null
+    this.publicAnnouncePromise = null
+    this.publicAnnounceToken = 0
   }
 
   async init() {
@@ -126,14 +159,15 @@ export class DecentralizedBoard {
 
     const blockstore = new IDBBlockstore('ipfschan-browser-blocks')
     await blockstore.open()
-    const heliaOptions = this.browserOnly
-      ? { blockstore, start: false, routers: [], blockBrokers: [] }
+    const heliaOptions = this.serverless
+      ? { blockstore, start: false }
       : { blockstore }
     this.helia = await createHelia(heliaOptions)
     this.dag = dagJson(this.helia)
     this.files = unixfs(this.helia)
-    if (this.browserOnly) {
+    if (this.serverless) {
       this.peerFiles = this.files
+      this.startPublicNetwork()
       return
     }
 
@@ -157,6 +191,51 @@ export class DecentralizedBoard {
     return localStorage.getItem(BOARD_STORAGE_KEY)
   }
 
+  startPublicNetwork() {
+    if (!this.publicNetwork || !this.helia) return null
+    if (this.publicNetworkReady) return this.publicNetworkReady
+
+    this.publicNetworkStatus = 'starting'
+    this.publicNetworkError = null
+    this.publicNetworkReady = this.helia.start()
+      .then(() => {
+        this.publicNetworkStatus = 'ready'
+        this.publicNetworkError = null
+        return true
+      })
+      .catch(err => {
+        this.publicNetworkStatus = 'failed'
+        this.publicNetworkError = err
+        throw err
+      })
+
+    return this.publicNetworkReady
+  }
+
+  async waitForPublicNetwork(timeoutMs = PUBLIC_NETWORK_START_TIMEOUT_MS) {
+    if (!this.publicNetwork) return null
+    const ready = this.startPublicNetwork()
+    if (!ready) return null
+    return withTimeout(
+      ready,
+      timeoutMs,
+      'Public IPFS relay startup timed out'
+    )
+  }
+
+  publicNetworkSummary() {
+    if (!this.publicNetwork) return null
+    if (this.publicNetworkError) return this.publicNetworkError.message
+    return this.publicNetworkStatus
+  }
+
+  notifyPublicAnnounce() {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent('ipfschan:public-announce', {
+      detail: this.lastPublicProvide
+    }))
+  }
+
   async newBoard() {
     await this.init()
     this.board = emptyBoard({ previousBoardCid: this.boardCid })
@@ -171,12 +250,26 @@ export class DecentralizedBoard {
     const normalizedBoardCid = CID.parse(boardCid).toString()
     const localBoardCid = this.latestLocalBoardCid()
 
-    if (this.browserOnly) {
+    if (this.serverless) {
+      const expectedPublicLoad = localBoardCid !== normalizedBoardCid
+      if (localBoardCid !== normalizedBoardCid) {
+        try {
+          await this.waitForPublicNetwork()
+        } catch (err) {
+          this.publicNetworkError = err
+        }
+      }
+
       try {
-        await this.loadFromHelia(normalizedBoardCid)
+        await this.loadFromPublicHelia(normalizedBoardCid)
+        if (expectedPublicLoad) {
+          this.lastLoadSource = 'public'
+        }
         return this.boardCid
       } catch (err) {
-        throw new Error('Board CID is not available in this browser-only Pages build')
+        this.lastLoadSource = 'public'
+        const reason = this.publicNetworkError?.message || err.message
+        throw new Error(`Board CID is not reachable through public IPFS: ${reason}`)
       }
     }
 
@@ -231,15 +324,37 @@ export class DecentralizedBoard {
     await this.helia.blockstore.put(cid, bytes)
   }
 
-  async loadFromHelia(boardCid) {
+  async loadFromPublicHelia(boardCid) {
+    const deadline = Date.now() + PUBLIC_LOAD_TIMEOUT_MS
+    let lastErr = null
+
+    while (Date.now() < deadline) {
+      const remaining = deadline - Date.now()
+      try {
+        return await withAbortableTimeout(
+          signal => this.loadFromHelia(boardCid, { signal }),
+          Math.min(PUBLIC_LOAD_ATTEMPT_TIMEOUT_MS, remaining),
+          'Board blocks are not reachable from public IPFS yet'
+        )
+      } catch (err) {
+        lastErr = err
+        if (Date.now() >= deadline) break
+        await sleep(Math.min(PUBLIC_LOAD_RETRY_DELAY_MS, deadline - Date.now()))
+      }
+    }
+
+    throw lastErr || new Error('Board blocks are not reachable from public IPFS yet')
+  }
+
+  async loadFromHelia(boardCid, options = {}) {
     const { CID } = await import('multiformats/cid')
     this.boardCid = CID.parse(boardCid).toString()
-    this.board = normalizeBoard(await this.dag.get(CID.parse(this.boardCid)))
+    this.board = normalizeBoard(await this.dag.get(CID.parse(this.boardCid), options))
     this.posts = []
 
     for (const postCid of this.board.posts) {
       const cid = CID.parse(postCid)
-      const post = await this.dag.get(cid)
+      const post = await this.dag.get(cid, options)
       this.posts.push(postRecordFromPayload(cid.toString(), post))
     }
 
@@ -252,7 +367,7 @@ export class DecentralizedBoard {
   async loadFromPeers(boardCid) {
     await this.init()
     if (!this.blockExchange) {
-      throw new Error('Live peer discovery is unavailable in this browser-only build')
+      throw new Error('App signaling is unavailable in this serverless build')
     }
 
     this.lastPeerError = null
@@ -340,6 +455,8 @@ export class DecentralizedBoard {
 
   async publish() {
     await this.init()
+    this.lastPublicProvide = null
+    this.lastPublicProvideError = null
     const now = new Date().toISOString()
     this.board = normalizeBoard({
       ...this.board,
@@ -351,6 +468,7 @@ export class DecentralizedBoard {
     localStorage.setItem(BOARD_STORAGE_KEY, this.boardCid)
     await this.mirrorToServer()
     await this.announceProvider()
+    this.queuePublicAnnounce()
     return this.boardCid
   }
 
@@ -442,9 +560,9 @@ export class DecentralizedBoard {
       const blob = new Blob([bytes], { type: attachment.mime || 'application/octet-stream' })
       return URL.createObjectURL(blob)
     } catch (err) {
+      this.lastPeerError = err
       if (!this.blockExchange) {
-        this.lastPeerError = err
-        throw new Error('Attachment is not available in this browser-only Pages build')
+        throw new Error('Attachment is not reachable through public IPFS yet')
       }
 
       try {
@@ -475,10 +593,114 @@ export class DecentralizedBoard {
     }
   }
 
+  async provideCid(cidStr) {
+    if (!this.publicNetwork || !cidStr) return null
+    await this.waitForPublicNetwork()
+    const { CID } = await import('multiformats/cid')
+    const cid = CID.parse(cidStr)
+    await withTimeout(
+      this.helia.routing.provide(cid),
+      PUBLIC_PROVIDE_TIMEOUT_MS,
+      `Public IPFS provider announce timed out for ${cidStr}`
+    )
+    return cid.toString()
+  }
+
+  publicCidSet() {
+    const cids = new Set()
+    if (this.boardCid) cids.add(this.boardCid)
+    for (const post of this.posts) {
+      if (post.cid) cids.add(post.cid)
+      if (post.attachment?.cid) cids.add(post.attachment.cid)
+    }
+    return [...cids]
+  }
+
+  queuePublicAnnounce() {
+    this.lastPublicProvide = null
+    this.lastPublicProvideError = null
+    if (!this.publicNetwork || !this.boardCid) return null
+
+    const token = this.publicAnnounceToken + 1
+    this.publicAnnounceToken = token
+    const cids = this.publicCidSet()
+    this.lastPublicProvide = {
+      attempted: cids.length,
+      provided: 0,
+      errors: [],
+      pending: true,
+      token,
+      startedAt: new Date().toISOString()
+    }
+    this.notifyPublicAnnounce()
+
+    this.publicAnnouncePromise = this.announcePublicCids(cids, token)
+      .catch(err => {
+        if (token !== this.publicAnnounceToken) {
+          return this.lastPublicProvide
+        }
+        this.lastPublicProvide = {
+          attempted: cids.length,
+          provided: 0,
+          errors: [err.message],
+          pending: false,
+          token,
+          startedAt: this.lastPublicProvide?.startedAt,
+          finishedAt: new Date().toISOString()
+        }
+        this.lastPublicProvideError = err
+        return this.lastPublicProvide
+      })
+      .finally(() => {
+        if (token === this.publicAnnounceToken) {
+          this.notifyPublicAnnounce()
+        }
+      })
+
+    return this.publicAnnouncePromise
+  }
+
+  async announcePublicCids(cids = this.publicCidSet(), token = this.publicAnnounceToken) {
+    if (!this.publicNetwork || !this.boardCid) return null
+
+    const startedAt = this.lastPublicProvide?.startedAt || new Date().toISOString()
+    const results = await Promise.all(cids.map(async cid => {
+      try {
+        return { cid, provided: await this.provideCid(cid) }
+      } catch (err) {
+        return { cid, error: err }
+      }
+    }))
+    const provided = results
+      .map(result => result.provided)
+      .filter(Boolean)
+    const errors = results
+      .filter(result => result.error)
+      .map(result => `${result.cid}: ${result.error.message}`)
+
+    if (token !== this.publicAnnounceToken) {
+      return this.lastPublicProvide
+    }
+
+    this.lastPublicProvide = {
+      attempted: provided.length + errors.length,
+      provided: provided.filter(Boolean).length,
+      errors,
+      pending: false,
+      token,
+      startedAt,
+      finishedAt: new Date().toISOString()
+    }
+    this.lastPublicProvideError = errors.length
+      ? new Error(errors.join('; '))
+      : null
+    return this.lastPublicProvide
+  }
+
   async mirrorToServer() {
     this.lastMirror = null
     this.lastMirrorError = null
-    if (this.browserOnly) return null
+    if (this.serverless) return null
 
     try {
       const formData = new FormData()

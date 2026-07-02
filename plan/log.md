@@ -860,3 +860,76 @@ Open questions and caveats:
 
 - The normal server API routes still exist for backend tests and legacy/helper behavior, but the client no longer exposes or calls them as a board option.
 - To make two clean GitHub Pages sessions share fresh boards, the next implementation needs a public/self-hosted mirror, relay, or publish-to-public-IPFS path rather than a server-backed board mode.
+
+## 2026-07-01 21:44:20 AKDT
+
+Prompt: "Right that's what I asked you to do 10 minutes ago at a public relay so I don't need to stand one up."
+
+Actions attempted:
+
+- Re-read the active AGENTS instructions, kept `plan/plan.md` and recent `plan/log.md` context in view, and treated the prompt as a correction to implement the public IPFS path rather than only documenting it.
+- Inspected `src/client/decentralized-board.js`, `src/client/main.js`, Helia browser defaults, Helia routing/storage internals, delegated routing behavior, trustless gateway routing, and circuit relay defaults.
+- Confirmed the existing Pages mode was explicitly local-only: `createHelia({ start: false, routers: [], blockBrokers: [] })`, no libp2p startup, no public routers, and no public block brokers.
+- Replaced the Pages local-only Helia config with a serverless public-network mode:
+  - Pages still skips app-owned `/api/p2p/*` signaling and mirror calls.
+  - Pages creates Helia with the IndexedDB blockstore and default browser networking stack.
+  - Pages starts Helia's public browser IPFS node in the background instead of blocking initial board creation.
+  - Pages tries public IPFS board retrieval through Helia's routing/block brokers instead of throwing the old browser-only error.
+- Added public provider announcement handling:
+  - board, post, and attachment CIDs are gathered from the current board state,
+  - provider announcements run in the background,
+  - the UI reports pending, complete, and incomplete announcement state,
+  - stale background announcements are ignored with a publish token so an older empty-board announce cannot overwrite a newer thread publish.
+- Added abortable public load retries:
+  - profile B originally failed when it opened a copied board URL immediately because a single long Helia read did not re-query routing after provider records propagated,
+  - the Pages loader now performs repeated abortable public retrieval attempts over a longer window before reporting unreachable content.
+- Updated `src/client/main.js` to show `board ready from public IPFS` and to refresh status when background public announce state changes.
+- Updated README, `plan/plan.md`, and `plan/tests.md` for the serverless public IPFS Pages behavior.
+- Regenerated the GitHub Pages build under `docs/`.
+- Served `docs/` locally under `/ipfschan/` with a temporary Node static server and drove two isolated headless Chrome profiles through CDP.
+- Shut down the temporary Chrome profiles after validation.
+
+Files touched:
+
+- `README.md`
+- `docs/index.html`
+- `docs/assets/index-CAFk9gxj.js`
+- `docs/assets/index-CBhQTUzn.js`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+- `src/client/decentralized-board.js`
+- `src/client/main.js`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-01 21:44:20 AKDT` for the prompt and `2026-07-01 22:09:58 AKDT` while preparing this log entry.
+- `sed -n '1,260p' src/client/decentralized-board.js`, `sed -n '260,620p' src/client/decentralized-board.js`, and `rg -n "browserOnly|serverless|boardPublishedMessage|load\\(|attachmentUrl|mirrorToServer|announce" src/client`: inspected the current local-only Pages path and status handling.
+- `sed -n '1,260p' node_modules/helia/src/utils/helia-defaults.ts`, `sed -n '1,280p' node_modules/helia/src/utils/libp2p-defaults.browser.ts`, `sed -n '1,260p' node_modules/@helia/utils/src/routing.ts`, and `sed -n '1,260p' node_modules/@helia/routers/src/libp2p-routing.ts`: confirmed Helia defaults include public delegated routing, bootstrappers, circuit relay transport, WebRTC/WebSockets, Bitswap, and trustless gateway retrieval.
+- `sed -n '1,260p' node_modules/@helia/delegated-routing-v1-http-api-client/src/routings.ts` and `sed -n '1,180p' node_modules/@helia/routers/src/delegated-http-routing.ts`: confirmed delegated HTTP `provide` is a no-op, so public publishing depends on libp2p content routing/provider records rather than a write-capable delegated endpoint.
+- `node --input-type=module <<'NODE' ... createHelia({ start: false }) ... NODE`: confirmed DAG-JSON adds succeed before, during, and after Helia startup with default block brokers.
+- Web documentation checks found that public delegated routing/gateways help retrieval, but browser-authored content still depends on provider records, pinning, or another availability handoff.
+- `node --check src/client/decentralized-board.js`: passed after each client model iteration.
+- `node --check src/client/main.js`: passed after UI status changes.
+- `npm test`: passed; 5 test files and 20 tests.
+- `npm run build`: passed; Vite still warned about the large Helia/libp2p chunk.
+- `npm run build:pages`: passed; final local Pages asset was `docs/assets/index-CBhQTUzn.js`; Vite still warned about the large Helia/libp2p chunk.
+- `node --input-type=module <<'NODE' ... prefix static server ... NODE`: started a temporary server for `http://127.0.0.1:8765/ipfschan/`.
+- `curl -sSf http://127.0.0.1:8765/ipfschan/ | rg -n "index-CBhQTUzn|p2p-status"`: confirmed the local Pages-shaped server returned the final Pages asset and app shell.
+- Headless Chrome/CDP two-profile probes:
+  - Initial public-network probe showed profile A could publish locally but provider announce timed out after the first short timeout, and profile B could not load the copied CID.
+  - A delayed retry against the same live authoring tab later loaded the board in profile B as `board ready from public IPFS`, proving the public path can work but propagation is slow.
+  - A later probe exposed a stale background announce race where the initial empty-board announce overwrote the thread publish as `1/1 CIDs`.
+  - Final local probe after publish tokens and abortable public load retries passed: profile A showed `board published; public IPFS announce attempted for 2/2 CIDs`, profile B opened the copied URL from clean storage and showed `board ready from public IPFS`, the thread content rendered, and both profiles made zero `/api` requests.
+
+Failures and pivots:
+
+- The first implementation treated a 15 second provider announce timeout as a failure, but the underlying public provider record later propagated and profile B could retrieve the board. The UX was changed to pending background announce instead of false failure.
+- A single long Helia read in profile B could fail before newly announced provider records were picked up. The load path now retries abortable public reads during the public load window.
+- A background announce from the initial empty board could complete after a later thread publish and overwrite the status. A publish token now prevents stale public announce completions from changing current state.
+- Headless Chrome produced many non-app WebRTC/STUN/SSL stderr warnings while probing public libp2p behavior. CDP DOM/network assertions, not Chrome stderr noise, were used for pass/fail.
+
+Open questions and caveats:
+
+- Public IPFS propagation is noticeably slower than the old app-owned mirror/signaling path. The current Pages path works without `/api`, but users should expect a delay before a freshly copied board URL resolves in a clean browser.
+- The authoring tab still needs to remain online long enough for public provider announcement and retrieval. A future durable pinning or availability handoff could improve offline persistence without reintroducing a selectable server-backed board mode.

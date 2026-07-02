@@ -138,19 +138,37 @@ function boardReadyMessage() {
   const source = {
     mirror: ' from availability mirror',
     peer: ' from live peer',
+    public: ' from public IPFS',
     local: ''
   }[decentralizedBoard.lastLoadSource] || ''
   return `board ready${source}: ${shortCid(state.boardCid)}`
 }
 
 function boardPublishedMessage() {
-  if (decentralizedBoard.browserOnly) {
-    return `board published locally: ${shortCid(state.boardCid)}`
+  if (decentralizedBoard.serverless) {
+    if (decentralizedBoard.lastPublicProvide?.pending) {
+      return `board published locally; public IPFS announce pending for ${decentralizedBoard.lastPublicProvide.attempted} CIDs: ${shortCid(state.boardCid)}`
+    }
+    if (decentralizedBoard.lastPublicProvideError) {
+      return `board published locally; public IPFS announce incomplete: ${decentralizedBoard.lastPublicProvideError.message}`
+    }
+    if (decentralizedBoard.lastPublicProvide) {
+      const { attempted, provided } = decentralizedBoard.lastPublicProvide
+      return `board published; public IPFS announce attempted for ${provided}/${attempted} CIDs: ${shortCid(state.boardCid)}`
+    }
+    return `board published locally; public IPFS ${decentralizedBoard.publicNetworkSummary() || 'starting'}: ${shortCid(state.boardCid)}`
   }
   if (decentralizedBoard.lastMirrorError) {
     return `board published locally; mirror failed: ${decentralizedBoard.lastMirrorError.message}`
   }
   return `board published and mirrored: ${shortCid(state.boardCid)}`
+}
+
+function publishStatusTone() {
+  if (decentralizedBoard.lastMirrorError || decentralizedBoard.lastPublicProvideError) {
+    return 'error'
+  }
+  return 'info'
 }
 
 async function loadP2PBoard(boardCid) {
@@ -484,7 +502,7 @@ async function createThread(formData) {
     : post.tags[0]
   await loadThreadsForTag(tag)
   await openThread(post.threadRootCid || post.cid, { tag })
-  setP2PStatus(boardPublishedMessage(), decentralizedBoard.lastMirrorError ? 'error' : 'info')
+  setP2PStatus(boardPublishedMessage(), publishStatusTone())
   renderModeControls()
   return post
 }
@@ -520,7 +538,7 @@ async function replyP2P(parentCid, formData) {
     { board: state.boardCid, tag: state.currentTag, thread: state.currentThread },
     { replace: true }
   )
-  setP2PStatus(boardPublishedMessage(), decentralizedBoard.lastMirrorError ? 'error' : 'info')
+  setP2PStatus(boardPublishedMessage(), publishStatusTone())
 }
 
 replyForm.addEventListener('submit', async e => {
@@ -563,7 +581,7 @@ newP2PBoardBtn.addEventListener('click', async () => {
     await loadTags()
     renderThreads()
     renderModeControls()
-    setP2PStatus(boardPublishedMessage(), decentralizedBoard.lastMirrorError ? 'error' : 'info')
+    setP2PStatus(boardPublishedMessage(), publishStatusTone())
     updateRoute({ board: state.boardCid, tag: null, thread: null })
   } catch (err) {
     setStatus(err.message, 'error')
@@ -603,6 +621,11 @@ window.addEventListener('popstate', () => {
   applyRoute().catch(err => {
     setStatus(err.message, 'error')
   })
+})
+
+window.addEventListener('ipfschan:public-announce', () => {
+  if (!decentralizedBoard.serverless || !state.boardCid) return
+  setP2PStatus(boardPublishedMessage(), publishStatusTone())
 })
 
 applyRoute({ replace: true }).catch(err => {

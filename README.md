@@ -15,8 +15,8 @@ IPFS-hosted imageboard rebuilt from scratch. The goal is to let each user host t
 - Importing a known reply CID imports its locally available ancestor chain into the index.
 - The app exposes `/api/health`, supports graceful shutdown, and can run with a persistent `DATA_DIR`.
 - The client is P2P-first: the browser runs Helia, stores blocks in IndexedDB, publishes board manifests as DAG-JSON CIDs, and keeps URLs shareable as `?board=<boardCid>&tag=<tag>&thread=<rootCid>`.
-- P2P Board Mode can transfer board/post blocks directly from a live browser peer over WebRTC data channels. It also mirrors browser-authored board snapshots to the server Helia node after verifying the claimed CIDs, so copied board links still work when no provider tab is online.
-- P2P attachments use browser Helia first, then an app-level WebRTC file-byte request to an open provider, then the verified server mirror as a fallback.
+- P2P Board Mode can transfer board/post blocks directly from a live browser peer over WebRTC data channels when the Node helper service is available. GitHub Pages builds skip those app-specific helper endpoints and instead start Helia's public browser IPFS stack for delegated routing, Bitswap/WebRTC transport, and trustless gateway retrieval.
+- P2P attachments use browser Helia first, then an app-level WebRTC file-byte request to an open provider or the verified server mirror when those helper endpoints are available.
 - The client UI now uses a dense retro terminal monitor layout inspired by the local `deno_tui` app, with board/tag/thread readouts, scrollable panes, and responsive desktop/mobile framing.
 - See `plan/plan.md` for the build plan, `plan/log.md` for the implementation log, `plan/tests.md` for testing strategy, and `plan/deploy.md` for deployment notes.
 
@@ -52,7 +52,7 @@ GitHub Pages static build:
 npm run build:pages
 ```
 
-This writes the browser-only Pages build to `docs/` with a `/ipfschan/` base path. The Pages build runs the same P2P-first client, but it stays local to the browser because GitHub Pages cannot serve the Node WebRTC signaling or mirror endpoints.
+This writes the serverless Pages build to `docs/` with a `/ipfschan/` base path. The Pages build runs the same P2P-first client and starts Helia's public browser IPFS networking instead of calling the Node WebRTC signaling or mirror endpoints. Fresh browser sharing depends on whether the browser-authored CIDs become reachable through the public IPFS network while the authoring tab remains online; public provider propagation can take a minute or more, so clean readers retry public loads before giving up.
 
 Container build:
 
@@ -92,7 +92,7 @@ Deployment environment variables:
 
 ## Notes
 - Posts and attachments are added to the local Helia node so the author hosts their own content; the app indexes metadata in `data/index.json`.
-- Posts, attachments, and the board manifest are authored by browser Helia instead of the normal thread/reply Express API. Fresh browsers try local IndexedDB, then a live WebRTC peer, then the CID-verified server availability mirror when the Node helper service is available.
+- Posts, attachments, and the board manifest are authored by browser Helia instead of the normal thread/reply Express API. Fresh browsers try local IndexedDB and, in the Pages build, the public IPFS browser network. Node-hosted builds can also use the app-level live peer path and CID-verified availability mirror.
 - API endpoints live under `/api` (see `src/server/routes.js`).
 - The server defaults to IPFS offline mode to avoid network interface issues in restricted environments. Set `IPFS_OFFLINE=false` to enable libp2p networking.
 - The current Helia 6 stack uses the native async-iterable filesystem blockstore contract.

@@ -8,6 +8,7 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Keep the server offline by default so local development and tests do not depend on network interfaces.
 - Treat IPFS CIDs as the authority for post and attachment content, with `data/index.json` as a derived local discovery index.
 - Treat the browser P2P board as the only client board surface; the Node process may host static assets, signaling, and a verified mirror, but not a selectable server-backed board mode.
+- Treat GitHub Pages as a serverless P2P build: it must not call app-owned `/api` helpers, but it should use Helia's public browser IPFS networking for delegated routing, Bitswap/WebRTC transport, and trustless gateway retrieval.
 - Render the client in a retro terminal style with no React or TypeScript.
 - Prefer headless tests for repository, IPFS, and API behavior before adding demos.
 
@@ -130,11 +131,19 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - P2P URLs no longer emit the redundant `mode=p2p` parameter; old links with that parameter remain harmless because route parsing ignores it.
 - The Node service remains useful as an optional static host, WebRTC signaling endpoint, and CID-verifying availability mirror.
 
+## 2026-07-01 Public IPFS Pages Networking
+
+- Replaced the GitHub Pages local-only Helia settings with Helia's default browser networking stack while still skipping app-specific `/api/p2p/*` signaling and mirror calls.
+- Pages startup now creates Helia without blocking on public networking, then starts the public IPFS node in the background so local board creation can remain responsive.
+- Pages board loads wait on the public node, then retry abortable Helia retrieval attempts through public routing, Bitswap/WebRTC, and trustless gateways before reporting that a board CID is unreachable.
+- Pages publishes launch bounded public provider announcements for the board, post, and attachment CIDs in the background and report pending, complete, or incomplete announcement state in the terminal status line.
+
 ## Next Useful Work
 
 1. Deploy to a named target and attach durable storage or a volume for `/data`.
-2. Harden the live peer path with richer peer diagnostics, TURN/relay configuration for NAT-hostile networks, larger attachment transfer coverage, and automated browser coverage.
-3. Add moderation and trust controls before exposing a public writable instance.
-4. Preserve and display richer thread tree context, such as focused reply target anchors and collapsible subtrees.
-5. Add backup/restore tooling for `data/index.json`, server IPFS blocks, and browser board exports.
-6. Add networked IPFS validation with `IPFS_OFFLINE=false` and browser-to-browser retrieval once the deployment environment is chosen.
+2. Validate and harden public IPFS reachability for browser-authored Pages CIDs; if public provider announcement is not reliable enough, add a real public pinning or relay handoff that still keeps the board surface P2P-first.
+3. Harden the live peer path with richer peer diagnostics, TURN/relay configuration for NAT-hostile networks, larger attachment transfer coverage, and automated browser coverage.
+4. Add moderation and trust controls before exposing a public writable instance.
+5. Preserve and display richer thread tree context, such as focused reply target anchors and collapsible subtrees.
+6. Add backup/restore tooling for `data/index.json`, server IPFS blocks, and browser board exports.
+7. Add networked IPFS validation with `IPFS_OFFLINE=false` and browser-to-browser retrieval once the deployment environment is chosen.
