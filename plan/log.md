@@ -942,6 +942,8 @@ Commands run and results:
   - the temporary Chrome CDP sessions were stopped after the passing probe.
 - `git status --short --branch`: showed `## main...origin/main` before this final log-only update.
 - `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py status --repo ipfschan --check-staleness`: reported the ICC index was stale at `105d3cb` versus current `81f1e5d`; no source-context lookup depended on stale ICC data during this final log-only update.
+- Follow-up cleanup at `2026-07-01 22:26:23 AKDT` found two leftover local headless Chrome profiles from the earlier local Pages probe under `/tmp/ipfschan-pages-public-a` and `/tmp/ipfschan-pages-public-b`.
+- `pkill -TERM -f '/tmp/ipfschan-pages-public-[ab]'`: stopped those local Chrome test profiles; a follow-up `ps`/`rg` check showed no remaining `ipfschan-pages-public`, `127.0.0.1:8765`, local static server, or `node --input-type=module` test process. Existing Vite processes under `/home/cos/projects/ulg` were unrelated and left running.
 
 Failures and pivots:
 
