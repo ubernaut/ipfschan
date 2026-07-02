@@ -804,6 +804,12 @@ Actions attempted:
   - profile B opened profile A's copied URL from clean storage and failed with `Board CID is not available in this browser-only Pages build`, which confirms the browser-only Pages limitation still exists without the Node helper service.
 - Shut down the temporary local Python server and Chrome sessions.
 - Refreshed ICC index and memory artifacts after the P2P-only changes.
+- Committed and pushed the P2P-only client plus regenerated `docs/` bundle.
+- Waited for GitHub Pages to serve the new `index-CAFk9gxj.js` asset.
+- Ran the same two-profile test against `https://ubernaut.github.io/ipfschan/`:
+  - live profile A created a thread and produced a P2P-only board URL with no `mode` parameter,
+  - live profile B opened the copied URL from clean storage and failed with `Board CID is not available in this browser-only Pages build`,
+  - both live profiles loaded the new Pages asset, had no server controls, and made zero `/api` requests.
 
 Files touched:
 
@@ -839,6 +845,10 @@ Commands run and results:
 - Sent Ctrl-C to the temporary Python HTTP server; it exited.
 - `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: refreshed successfully with 95 files indexed.
 - `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed successfully with 199 chunks.
+- `git commit -m "Remove server-backed client mode"`: created commit `c7452b4`.
+- `git push origin main`: pushed `c7452b4` to `origin/main`.
+- `curl -fsSL 'https://ubernaut.github.io/ipfschan/?deploy=c7452b4'` loop: Pages served `index-CAFk9gxj.js` on attempt 3 and the live HTML no longer included the server/import controls.
+- Live two-profile CDP probe against `https://ubernaut.github.io/ipfschan/?liveProbe=c7452b4`: profile A reported `board published locally`, no server controls, no `/api` requests, `hasModeParam: false`, and `assetLoaded: true`; profile B reported `Board CID is not available in this browser-only Pages build`, no server controls, no `/api` requests, `hasModeParam: false`, and `assetLoaded: true`.
 
 Failures and pivots:
 
@@ -848,6 +858,5 @@ Failures and pivots:
 
 Open questions and caveats:
 
-- The commit and push happen after this log entry so the deployed Pages build can include the updated log.
 - The normal server API routes still exist for backend tests and legacy/helper behavior, but the client no longer exposes or calls them as a board option.
 - To make two clean GitHub Pages sessions share fresh boards, the next implementation needs a public/self-hosted mirror, relay, or publish-to-public-IPFS path rather than a server-backed board mode.
