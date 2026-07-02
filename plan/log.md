@@ -772,3 +772,82 @@ Open questions and caveats:
 
 - The reliable deploy path remains running our Node service or a small self-hosted relay/mirror service for provider lookup, signaling, and retention of fresh boards.
 - A Pages-only public retrieval mode could be added next, but it should be presented honestly as "load public IPFS CIDs when available," not full serverless P2P publishing.
+
+## 2026-07-01 21:04:20 AKDT
+
+Prompt: "id like you to mske another github pages build deploy and test it and see if it wirks from two seoarate sessions"
+
+Follow-up prompt recorded at 2026-07-01 21:10:24 AKDT: "I want you to remove the server backed option entirely. this is p2p first software."
+
+Actions attempted:
+
+- Kept the AGENTS.md instructions in context, including plan/log/test updates, Node 24, no TypeScript/React, and shutting down temporary servers.
+- Re-read the ICC skill instructions, searched memory for current `ipfschan` P2P/browser validation notes, and reviewed `plan/plan.md` plus recent `plan/log.md` entries before changing code.
+- Confirmed the public Pages URL was already serving at `https://ubernaut.github.io/ipfschan/`.
+- Ran a Pages rebuild before the follow-up; the generated files were initially unchanged.
+- Pivoted after the follow-up to remove the selectable server-backed client option entirely.
+- Removed Server/P2P mode buttons and the import panel from `src/client/index.html`.
+- Simplified `src/client/main.js` so the browser product path is always P2P:
+  - initial state is P2P,
+  - route parsing ignores any legacy `mode` query parameter,
+  - new URLs emit `board`, `tag`, and `thread` without `mode=p2p`,
+  - tag/thread/post rendering reads only from the browser Helia board model,
+  - thread creation, replies, and attachment rendering always use browser Helia/P2P paths,
+  - the normal `/api/tags`, `/api/thread`, `/api/import`, and `/api/file` client paths were removed.
+- Kept `/api/p2p/*` support paths in place because they are signaling/mirror infrastructure rather than a selectable server-backed board.
+- Updated terminal CSS layout to remove the dead import grid area and old server-index empty state.
+- Updated README, `plan/plan.md`, and `plan/tests.md` to describe the P2P-first client and the new URL shape.
+- Rebuilt the normal production bundle and the GitHub Pages `docs/` bundle.
+- Served `docs/` locally under `/ipfschan/` and validated the generated HTML points at the new P2P-only hashed assets.
+- Ran a local two-profile headless Chrome test:
+  - profile A opened the local Pages build, created a thread, produced a board URL with no `mode` parameter, and made zero `/api` requests,
+  - profile B opened profile A's copied URL from clean storage and failed with `Board CID is not available in this browser-only Pages build`, which confirms the browser-only Pages limitation still exists without the Node helper service.
+- Shut down the temporary local Python server and Chrome sessions.
+- Refreshed ICC index and memory artifacts after the P2P-only changes.
+
+Files touched:
+
+- `README.md`
+- `docs/index.html`
+- `docs/assets/index-B9UOPzMS.css`
+- `docs/assets/index-CAFk9gxj.js`
+- `docs/assets/index-Bmj0YnMW.css`
+- `docs/assets/index-d-a5rfk6.js`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+- `src/client/index.html`
+- `src/client/main.js`
+- `src/client/styles.css`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-01 21:04:20 AKDT` for the initial prompt.
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-01 21:10:24 AKDT` for the follow-up prompt.
+- `curl -sSI https://ubernaut.github.io/ipfschan/`: returned HTTP 200 from GitHub Pages.
+- `git push origin main`: pushed the earlier local public-IPFS planning commit `105d3cb` to origin before the follow-up pivot.
+- `node --check src/client/main.js`: passed.
+- `npm test`: passed with 5 test files and 20 tests.
+- `npm run build`: passed; Vite still warned that the Helia/libp2p chunk is larger than 500 kB.
+- `npm run build:pages`: passed and generated `docs/assets/index-CAFk9gxj.js` plus `docs/assets/index-B9UOPzMS.css`; Vite still warned that the Helia/libp2p chunk is larger than 500 kB.
+- `curl -sSf http://127.0.0.1:8765/ipfschan/ | rg -n "server-mode|p2p-mode|import-post|index-CAFk9gxj|mode-readout|browser local|P2P"`: confirmed the generated local Pages HTML uses the new asset and contains the P2P/browser-local readouts with no matched server/import controls.
+- `curl -sSI http://127.0.0.1:8765/ipfschan/assets/index-CAFk9gxj.js`: returned `200 OK`.
+- First local two-profile CDP probe timed out waiting 20 seconds for profile A board readiness.
+- A longer single-profile CDP debug probe showed the page eventually reached `board ready`, had no server controls, no `mode` query parameter, and only a favicon 404. That probe exited nonzero only because Chrome had not released its temporary profile before cleanup.
+- `rm -rf /tmp/ipfschan-debug-lcKB8L`: cleaned the leftover temporary Chrome profile from the debug probe.
+- Retried the two-profile CDP probe with a longer startup window: passed and returned profile A with `board published locally`, no server controls, no `/api` requests, and no `mode` parameter; profile B returned `Board CID is not available in this browser-only Pages build` from clean storage.
+- Sent Ctrl-C to the temporary Python HTTP server; it exited.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan`: refreshed successfully with 95 files indexed.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed successfully with 199 chunks.
+
+Failures and pivots:
+
+- The initial task was to redeploy and test GitHub Pages from two sessions, but the follow-up changed the implementation target to remove server-backed mode first.
+- The first local CDP wait used too short a startup timeout for browser Helia in headless Chrome. A longer probe showed startup was healthy.
+- Browser-only GitHub Pages still cannot share a freshly authored board across clean sessions because there is no availability mirror or signaling endpoint on Pages. Profile B's failure is the expected limitation, not a regression in the P2P-only UI.
+
+Open questions and caveats:
+
+- The commit and push happen after this log entry so the deployed Pages build can include the updated log.
+- The normal server API routes still exist for backend tests and legacy/helper behavior, but the client no longer exposes or calls them as a board option.
+- To make two clean GitHub Pages sessions share fresh boards, the next implementation needs a public/self-hosted mirror, relay, or publish-to-public-IPFS path rather than a server-backed board mode.

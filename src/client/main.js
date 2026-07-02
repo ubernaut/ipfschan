@@ -1,11 +1,9 @@
 import { decentralizedBoard } from './decentralized-board.js'
 
-const MODE_SERVER = 'server'
 const MODE_P2P = 'p2p'
-const PAGES_BUILD = import.meta.env.MODE === 'pages'
 
 const state = {
-  mode: MODE_SERVER,
+  mode: MODE_P2P,
   boardCid: null,
   tags: [],
   threads: [],
@@ -23,12 +21,8 @@ const postsEl = document.getElementById('thread-posts')
 const replyWrap = document.getElementById('reply-form-wrap')
 const replyForm = document.getElementById('reply-form')
 const threadForm = document.getElementById('thread-form')
-const importSection = document.getElementById('import-post')
-const importForm = document.getElementById('import-form')
 const statusEl = document.getElementById('status')
 const copyThreadLinkBtn = document.getElementById('copy-thread-link')
-const serverModeBtn = document.getElementById('server-mode')
-const p2pModeBtn = document.getElementById('p2p-mode')
 const newP2PBoardBtn = document.getElementById('new-p2p-board')
 const copyBoardLinkBtn = document.getElementById('copy-board-link')
 const loadBoardForm = document.getElementById('load-board-form')
@@ -46,19 +40,6 @@ function el(tag, className, text) {
   return node
 }
 
-async function fetchJSON(url, options = {}) {
-  const res = await fetch(url, options)
-  if (!res.ok) {
-    const payload = await res.json().catch(() => ({}))
-    throw new Error(payload.error || `Request failed (${res.status})`)
-  }
-  return res.json()
-}
-
-function isP2PMode() {
-  return state.mode === MODE_P2P
-}
-
 function setStatus(message, tone = 'info') {
   statusEl.textContent = message || ''
   statusEl.dataset.tone = tone
@@ -72,13 +53,11 @@ function setP2PStatus(message, tone = 'info') {
 function updateTelemetry() {
   document.body.dataset.mode = state.mode
   if (appEl) appEl.dataset.mode = state.mode
-  if (modeReadoutEl) modeReadoutEl.textContent = isP2PMode() ? 'P2P' : 'SERVER'
+  if (modeReadoutEl) modeReadoutEl.textContent = 'P2P'
   if (boardReadoutEl) {
     boardReadoutEl.textContent = state.boardCid
       ? shortCid(state.boardCid)
-      : PAGES_BUILD
-        ? 'browser local'
-        : 'server index'
+      : 'browser local'
   }
   if (tagReadoutEl) tagReadoutEl.textContent = state.currentTag || 'none'
   if (threadReadoutEl) threadReadoutEl.textContent = state.currentThread ? shortCid(state.currentThread) : 'none'
@@ -86,9 +65,7 @@ function updateTelemetry() {
 
 function readRoute() {
   const params = new URLSearchParams(window.location.search)
-  const mode = PAGES_BUILD || params.get('mode') === MODE_P2P ? MODE_P2P : MODE_SERVER
   return {
-    mode,
     board: params.get('board') || null,
     tag: params.get('tag') || null,
     thread: params.get('thread') || null
@@ -96,21 +73,15 @@ function readRoute() {
 }
 
 function routeUrl({
-  mode = state.mode,
   board = state.boardCid,
   tag = state.currentTag,
   thread = state.currentThread
 } = {}) {
   const url = new URL(window.location.href)
-  if (mode === MODE_P2P) {
-    url.searchParams.set('mode', MODE_P2P)
-    if (board) {
-      url.searchParams.set('board', board)
-    } else {
-      url.searchParams.delete('board')
-    }
+  url.searchParams.delete('mode')
+  if (board) {
+    url.searchParams.set('board', board)
   } else {
-    url.searchParams.delete('mode')
     url.searchParams.delete('board')
   }
 
@@ -134,21 +105,20 @@ function threadUrl(rootCid = state.currentThread, tag = state.currentTag) {
 }
 
 function boardUrl(boardCid = state.boardCid) {
-  return routeUrl({ mode: MODE_P2P, board: boardCid, tag: null, thread: null })
+  return routeUrl({ board: boardCid, tag: null, thread: null })
 }
 
 function updateRoute(
   {
-    mode = state.mode,
     board = state.boardCid,
     tag = state.currentTag,
     thread = state.currentThread
   } = {},
   { replace = false } = {}
 ) {
-  const url = routeUrl({ mode, board, tag, thread })
+  const url = routeUrl({ board, tag, thread })
   if (url.href === window.location.href) return
-  const statePayload = { mode, board, tag, thread }
+  const statePayload = { mode: MODE_P2P, board, tag, thread }
   if (replace) {
     window.history.replaceState(statePayload, '', url)
   } else {
@@ -157,17 +127,10 @@ function updateRoute(
 }
 
 function renderModeControls() {
-  serverModeBtn.classList.toggle('active', state.mode === MODE_SERVER)
-  p2pModeBtn.classList.toggle('active', state.mode === MODE_P2P)
-  serverModeBtn.disabled = PAGES_BUILD
-  serverModeBtn.title = PAGES_BUILD ? 'Server mode requires the Node app' : ''
-  importSection.classList.toggle('hidden', isP2PMode())
   copyBoardLinkBtn.disabled = !state.boardCid
   currentBoardEl.textContent = state.boardCid
     ? `Current board: ${state.boardCid}`
-    : PAGES_BUILD
-      ? 'Current board: browser local'
-      : 'Current board: server index'
+    : 'Current board: browser local'
   updateTelemetry()
 }
 
@@ -210,27 +173,6 @@ async function loadP2PBoard(boardCid) {
   renderModeControls()
 }
 
-async function switchToServerMode({ replace = false } = {}) {
-  if (PAGES_BUILD) {
-    setStatus('Server mode requires the Node app; this Pages build is browser-local.', 'error')
-    await switchToP2PMode({ replace })
-    return
-  }
-
-  state.mode = MODE_SERVER
-  state.boardCid = null
-  state.currentTag = null
-  state.currentThread = null
-  state.threads = []
-  state.posts = []
-  renderModeControls()
-  setP2PStatus('')
-  await loadTags()
-  renderThreads()
-  clearThreadView('')
-  updateRoute({ mode: MODE_SERVER, board: null, tag: null, thread: null }, { replace })
-}
-
 async function switchToP2PMode({ boardCid = null, replace = false } = {}) {
   state.currentTag = null
   state.currentThread = null
@@ -240,13 +182,11 @@ async function switchToP2PMode({ boardCid = null, replace = false } = {}) {
   await loadP2PBoard(boardCid)
   await loadTags()
   renderThreads()
-  updateRoute({ mode: MODE_P2P, board: state.boardCid, tag: null, thread: null }, { replace })
+  updateRoute({ board: state.boardCid, tag: null, thread: null }, { replace })
 }
 
 async function loadTags() {
-  state.tags = isP2PMode()
-    ? decentralizedBoard.getTags()
-    : await fetchJSON('/api/tags')
+  state.tags = decentralizedBoard.getTags()
   renderTags()
   renderModeControls()
 }
@@ -263,9 +203,7 @@ function clearThreadView(message = '') {
 
 async function loadThreadsForTag(tag) {
   state.currentTag = tag
-  state.threads = isP2PMode()
-    ? decentralizedBoard.getThreadsByTag(tag)
-    : await fetchJSON(`/api/tags/${encodeURIComponent(tag)}/threads`)
+  state.threads = decentralizedBoard.getThreadsByTag(tag)
   renderTags()
   renderThreads()
   updateTelemetry()
@@ -280,10 +218,6 @@ async function selectTag(tag, { updateUrl: shouldUpdateUrl = true } = {}) {
 }
 
 async function fetchThread(rootCid) {
-  if (!isP2PMode()) {
-    return fetchJSON(`/api/thread/${rootCid}`)
-  }
-
   const data = decentralizedBoard.getThreadTree(rootCid)
   if (!data.posts.length) {
     throw new Error('Thread not found in current board')
@@ -305,24 +239,20 @@ async function openThread(rootCid, { updateUrl: shouldUpdateUrl = true, tag = st
 
 async function applyRoute({ replace = false } = {}) {
   const route = readRoute()
-  state.mode = route.mode
-  state.boardCid = route.mode === MODE_P2P ? route.board : null
+  state.mode = MODE_P2P
+  state.boardCid = route.board
   renderModeControls()
 
-  if (route.mode === MODE_P2P) {
-    try {
-      await loadP2PBoard(route.board)
-    } catch (err) {
-      state.tags = []
-      state.threads = []
-      clearThreadView('')
-      renderTags()
-      renderThreads()
-      setP2PStatus(err.message, 'error')
-      throw err
-    }
-  } else {
-    setP2PStatus('')
+  try {
+    await loadP2PBoard(route.board)
+  } catch (err) {
+    state.tags = []
+    state.threads = []
+    clearThreadView('')
+    renderTags()
+    renderThreads()
+    setP2PStatus(err.message, 'error')
+    throw err
   }
 
   await loadTags()
@@ -341,7 +271,7 @@ async function applyRoute({ replace = false } = {}) {
       await openThread(route.thread, { updateUrl: false, tag: route.tag })
       if (replace) {
         updateRoute(
-          { mode: state.mode, board: state.boardCid, tag: route.tag, thread: route.thread },
+          { board: state.boardCid, tag: route.tag, thread: route.thread },
           { replace: true }
         )
       }
@@ -353,7 +283,7 @@ async function applyRoute({ replace = false } = {}) {
     clearThreadView('')
     if (replace) {
       updateRoute(
-        { mode: state.mode, board: state.boardCid, tag: route.tag, thread: null },
+        { board: state.boardCid, tag: route.tag, thread: null },
         { replace: true }
       )
     }
@@ -436,9 +366,6 @@ function revokeObjectUrls() {
 
 async function attachmentUrl(attachment) {
   if (!attachment?.cid) return null
-  if (!isP2PMode()) {
-    return `/api/file/${attachment.cid}`
-  }
   const url = await decentralizedBoard.attachmentUrl(attachment)
   if (url?.startsWith('blob:')) {
     objectUrls.add(url)
@@ -543,7 +470,7 @@ function tagsFromForm(formData) {
     .filter(Boolean) || []
 }
 
-async function createP2PThread(formData) {
+async function createThread(formData) {
   const post = await decentralizedBoard.createThread({
     title: formData.get('title')?.toString() || '',
     body: formData.get('body')?.toString() || '',
@@ -562,27 +489,11 @@ async function createP2PThread(formData) {
   return post
 }
 
-async function createServerThread(formData) {
-  const res = await fetchJSON('/api/thread', {
-    method: 'POST',
-    body: formData
-  })
-  await loadTags()
-  const tag = state.currentTag && res.tags.includes(state.currentTag)
-    ? state.currentTag
-    : res.tags[0]
-  await loadThreadsForTag(tag)
-  await openThread(res.threadRootCid || res.cid, { tag })
-  return res
-}
-
 threadForm.addEventListener('submit', async e => {
   e.preventDefault()
   const formData = new FormData(threadForm)
   try {
-    const post = isP2PMode()
-      ? await createP2PThread(formData)
-      : await createServerThread(formData)
+    const post = await createThread(formData)
     threadForm.reset()
     setStatus(`thread created: ${shortCid(post.cid)}`)
   } catch (err) {
@@ -606,25 +517,10 @@ async function replyP2P(parentCid, formData) {
     await openThread(state.currentThread, { updateUrl: false })
   }
   updateRoute(
-    { mode: MODE_P2P, board: state.boardCid, tag: state.currentTag, thread: state.currentThread },
+    { board: state.boardCid, tag: state.currentTag, thread: state.currentThread },
     { replace: true }
   )
   setP2PStatus(boardPublishedMessage(), decentralizedBoard.lastMirrorError ? 'error' : 'info')
-}
-
-async function replyServer(parentCid, formData) {
-  formData.delete('parentCid')
-  await fetchJSON(`/api/thread/${encodeURIComponent(parentCid)}/reply`, {
-    method: 'POST',
-    body: formData
-  })
-  await loadTags()
-  if (state.currentTag) {
-    await loadThreadsForTag(state.currentTag)
-  }
-  if (state.currentThread) {
-    await openThread(state.currentThread, { updateUrl: false })
-  }
 }
 
 replyForm.addEventListener('submit', async e => {
@@ -636,42 +532,10 @@ replyForm.addEventListener('submit', async e => {
   }
   const formData = new FormData(replyForm)
   try {
-    if (isP2PMode()) {
-      await replyP2P(parentCid, formData)
-    } else {
-      await replyServer(parentCid, formData)
-    }
+    await replyP2P(parentCid, formData)
     replyForm.reset()
     replyWrap.classList.add('hidden')
     setStatus('reply posted')
-  } catch (err) {
-    setStatus(err.message, 'error')
-  }
-})
-
-importForm.addEventListener('submit', async e => {
-  e.preventDefault()
-  const cid = new FormData(importForm).get('cid')?.toString().trim()
-  if (!cid) {
-    setStatus('post CID is required', 'error')
-    return
-  }
-
-  try {
-    const post = await fetchJSON('/api/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cid })
-    })
-    importForm.reset()
-    setStatus(`imported: ${shortCid(post.cid)}`)
-    await loadTags()
-    if (post.tags?.[0]) {
-      await loadThreadsForTag(post.tags[0])
-    }
-    if (post.threadRootCid) {
-      await openThread(post.threadRootCid, { tag: post.tags?.[0] || state.currentTag })
-    }
   } catch (err) {
     setStatus(err.message, 'error')
   }
@@ -688,19 +552,6 @@ copyThreadLinkBtn.addEventListener('click', async () => {
   }
 })
 
-serverModeBtn.addEventListener('click', () => {
-  switchToServerMode().catch(err => {
-    setStatus(err.message, 'error')
-  })
-})
-
-p2pModeBtn.addEventListener('click', () => {
-  switchToP2PMode().catch(err => {
-    setStatus(err.message, 'error')
-    setP2PStatus(err.message, 'error')
-  })
-})
-
 newP2PBoardBtn.addEventListener('click', async () => {
   try {
     state.mode = MODE_P2P
@@ -713,7 +564,7 @@ newP2PBoardBtn.addEventListener('click', async () => {
     renderThreads()
     renderModeControls()
     setP2PStatus(boardPublishedMessage(), decentralizedBoard.lastMirrorError ? 'error' : 'info')
-    updateRoute({ mode: MODE_P2P, board: state.boardCid, tag: null, thread: null })
+    updateRoute({ board: state.boardCid, tag: null, thread: null })
   } catch (err) {
     setStatus(err.message, 'error')
     setP2PStatus(err.message, 'error')

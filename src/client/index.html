@@ -17,11 +17,11 @@
         <div class="readout-grid" aria-label="board state">
           <div class="readout">
             <span>mode</span>
-            <strong id="mode-readout">SERVER</strong>
+            <strong id="mode-readout">P2P</strong>
           </div>
           <div class="readout">
             <span>board</span>
-            <strong id="board-readout">server index</strong>
+            <strong id="board-readout">browser local</strong>
           </div>
           <div class="readout">
             <span>tag</span>
@@ -41,11 +41,7 @@
 
       <section id="p2p-board" class="terminal-panel">
         <div class="section-heading">
-          <h2>Board Mode</h2>
-          <div class="mode-controls" role="group" aria-label="board mode">
-            <button id="server-mode" class="secondary" type="button">Server</button>
-            <button id="p2p-mode" class="secondary" type="button">P2P</button>
-          </div>
+          <h2>P2P Board</h2>
         </div>
         <div class="meter-line">
           <span>peer sync</span>
@@ -62,7 +58,7 @@
           </label>
           <button type="submit">Load Board</button>
         </form>
-        <p id="current-board" class="cid-line">Current board: server index</p>
+        <p id="current-board" class="cid-line">Current board: browser local</p>
       </section>
 
       <section id="tags-section" class="terminal-panel">
@@ -90,17 +86,6 @@
             <input type="file" name="attachment" />
           </label>
           <button type="submit">Create Thread</button>
-        </form>
-      </section>
-
-      <section id="import-post" class="terminal-panel">
-        <h2>Import CID</h2>
-        <form id="import-form">
-          <label>
-            Post CID
-            <input type="text" name="cid" placeholder="bafy..." required />
-          </label>
-          <button type="submit">Import Post</button>
         </form>
       </section>
 

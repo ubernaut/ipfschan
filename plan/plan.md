@@ -7,6 +7,7 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Keep the implementation in ES modules with Express for the API, Helia for IPFS, and Vite for the client.
 - Keep the server offline by default so local development and tests do not depend on network interfaces.
 - Treat IPFS CIDs as the authority for post and attachment content, with `data/index.json` as a derived local discovery index.
+- Treat the browser P2P board as the only client board surface; the Node process may host static assets, signaling, and a verified mirror, but not a selectable server-backed board mode.
 - Render the client in a retro terminal style with no React or TypeScript.
 - Prefer headless tests for repository, IPFS, and API behavior before adding demos.
 
@@ -17,7 +18,7 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Local JSON index for posts, threads, tags, post counts, and last activity.
 - Vite client for tag browsing, thread creation, thread opening, replies, CID imports, and attachment display.
 - Shareable URL state for tag and thread views using `?tag=<tag>&thread=<rootCid>`.
-- Browser-owned P2P board mode using Helia, DAG-JSON, UnixFS, IndexedDB blocks, and URL state shaped as `?mode=p2p&board=<boardCid>&tag=<tag>&thread=<rootCid>`.
+- Browser-owned P2P board mode using Helia, DAG-JSON, UnixFS, IndexedDB blocks, and URL state shaped as `?board=<boardCid>&tag=<tag>&thread=<rootCid>`.
 - Vitest/Supertest coverage for repository behavior, IPFS round trips, and API workflows.
 - Dockerfile, Compose config, health route, graceful shutdown, and smoke script for deployable runtime validation.
 
@@ -121,6 +122,13 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - Public IPFS utilities can help with retrieval: delegated routing at `https://delegated-ipfs.dev/routing/v1`, public gateways such as `https://ipfs.io` and `https://dweb.link`, and trustless gateway fallback at `https://trustless-gateway.link`.
 - These are not a direct replacement for the app's provider registry, WebRTC signaling, or availability mirror because browser-authored board blocks still need to be announced, reachable, and retained somewhere.
 - A practical Pages-compatible next slice is to add an explicit public-retrieval mode for CIDs already available on IPFS while keeping our Node service or a self-hosted relay/mirror as the reliable path for freshly authored boards.
+
+## 2026-07-01 P2P-Only Client Direction
+
+- Removed the selectable server-backed board mode from the client.
+- The client always boots into a browser Helia board and no longer calls the normal thread/tag/reply/import API paths.
+- P2P URLs no longer emit the redundant `mode=p2p` parameter; old links with that parameter remain harmless because route parsing ignores it.
+- The Node service remains useful as an optional static host, WebRTC signaling endpoint, and CID-verifying availability mirror.
 
 ## Next Useful Work
 

@@ -75,8 +75,7 @@ body::after {
     "header header header"
     "status status status"
     "board compose thread"
-    "tags threads thread"
-    "import threads thread";
+    "tags threads thread";
   gap: 12px;
   align-items: start;
 }
@@ -227,10 +226,6 @@ h1 {
 
 #new-thread {
   grid-area: compose;
-}
-
-#import-post {
-  grid-area: import;
 }
 
 #threads-section {
@@ -422,14 +417,12 @@ button:disabled {
   opacity: 0.42;
 }
 
-.mode-controls,
 .board-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.mode-controls button,
 .board-actions button {
   flex: 1 1 112px;
 }
@@ -439,14 +432,12 @@ button:disabled {
   grid-template-columns: 1fr;
 }
 
-#p2p-board .mode-controls,
 #p2p-board .board-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   width: 100%;
 }
 
-#p2p-board .mode-controls button,
 #p2p-board .board-actions button {
   min-width: 0;
   padding-right: 8px;
@@ -481,7 +472,7 @@ button:disabled {
 }
 
 #p2p-status:empty::before {
-  content: "server index active";
+  content: "browser node idle";
   color: var(--muted);
 }
 
@@ -723,7 +714,7 @@ img.thumb.expanded {
       "status status"
       "board tags"
       "compose threads"
-      "import thread";
+      "thread thread";
   }
 
   .terminal-header {
@@ -746,8 +737,7 @@ img.thumb.expanded {
       "tags"
       "compose"
       "threads"
-      "thread"
-      "import";
+      "thread";
     gap: 10px;
   }
 
@@ -769,7 +759,6 @@ img.thumb.expanded {
     flex-direction: column;
   }
 
-  .mode-controls,
   .board-actions {
     width: 100%;
   }
