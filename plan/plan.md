@@ -157,10 +157,18 @@ Goal: build ipfschan as a Vite/vanilla-JS imageboard where users host posts and 
 - The WebRTC data-channel protocol can request verified thread post records from a live peer; imported peer batches are CID-checked and rolled back if a record is invalid or belongs to another thread.
 - Node-hosted browser Helia now starts local-only; the app-owned WebRTC helper and mirror path handle live transfer there, while only the GitHub Pages build starts Helia's public browser network.
 
+## 2026-07-02 GitHub Pages URL Record Fallback
+
+- Added a `records=` thread URL payload containing the current thread's post records as base64url JSON.
+- URL records are treated as untrusted hints: each record is re-added through Helia and accepted only when the resulting CID matches the claimed CID and the record belongs to the requested thread root.
+- GitHub Pages route loading now falls back to verified URL records when the public IPFS thread index CID is not reachable yet, so shared thread links can render text posts and replies without waiting for public provider discovery.
+- Attachment metadata is included in URL records, but attachment bytes are still served by browser Helia, public IPFS, live peers, or the Node-hosted mirror where available.
+- Pages remains static and has no live signaling channel; old already-open tabs need an updated shared URL or a future public relay/pinning layer to discover replies made after their current immutable snapshot.
+
 ## Next Useful Work
 
 1. Deploy to a named target and attach durable storage or a volume for `/data`.
-2. Validate and harden public IPFS reachability for browser-authored Pages CIDs; if public provider announcement is not reliable enough, add a real public pinning or relay handoff that still keeps the thread surface P2P-first.
+2. Add a real public relay, pinning handoff, or serverless signaling layer for GitHub Pages so already-open static tabs can discover new replies without relying on an updated URL.
 3. Harden the live peer path with richer peer diagnostics, TURN/relay configuration for NAT-hostile networks, larger attachment transfer coverage, reply-sync browser automation, and automated browser coverage.
 4. Add moderation and trust controls before exposing a public writable instance.
 5. Preserve and display richer thread tree context, such as focused reply target anchors and collapsible subtrees.

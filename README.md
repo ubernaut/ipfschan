@@ -14,7 +14,7 @@ IPFS-hosted imageboard rebuilt from scratch. The goal is to let each user host t
 - Thread fetches now return parent-before-child tree order with reply depth metadata.
 - Importing a known reply CID imports its locally available ancestor chain into the index.
 - The app exposes `/api/health`, supports graceful shutdown, and can run with a persistent `DATA_DIR`.
-- The client is P2P-first: the browser runs Helia, stores blocks in IndexedDB, publishes a thread index DAG-JSON CID, and keeps URLs shareable as `?index=<indexCid>&tag=<tag>&thread=<rootCid>`. Reply links can also carry immutable reply hints as `replies=<replyCid,...>` so an older index link can still load newer replies by CID. Old `?board=<cid>` links remain readable.
+- The client is P2P-first: the browser runs Helia, stores blocks in IndexedDB, publishes a thread index DAG-JSON CID, and keeps URLs shareable as `?index=<indexCid>&tag=<tag>&thread=<rootCid>`. Thread links also carry CID-verified text records in `records=` plus reply CID hints in `replies=`, so GitHub Pages readers can render shared thread content even when public IPFS provider discovery lags. Old `?board=<cid>` links remain readable.
 - Node-hosted builds can transfer index/post blocks directly from a live browser peer over WebRTC data channels when the Node helper service is available. Open peers now advertise both index CIDs and thread-root CIDs, so another live session can ask for the current post records in a thread even if its original index CID is stale. In Node-hosted mode, browser Helia stays local-only and the app helper handles live transfer/mirror fallback. GitHub Pages builds skip those app-specific helper endpoints and instead start Helia's public browser IPFS stack for delegated routing, Bitswap/WebRTC transport, and trustless gateway retrieval.
 - P2P attachments use browser Helia first, retry public IPFS reads in serverless Pages builds, then use an app-level WebRTC file-byte request to an open provider or the verified server mirror when those helper endpoints are available.
 - The client UI now uses a dense retro terminal monitor layout inspired by the local `deno_tui` app, with sync/tag/thread readouts, blocking progress dialogs for load/post waits, scrollable panes, and responsive desktop/mobile framing.
@@ -52,7 +52,7 @@ GitHub Pages static build:
 npm run build:pages
 ```
 
-This writes the serverless Pages build to `docs/` with a `/ipfschan/` base path. The Pages build runs the same P2P-first client and starts Helia's public browser IPFS networking instead of calling the Node WebRTC signaling or mirror endpoints. Fresh browser sharing depends on whether the browser-authored CIDs become reachable through the public IPFS network while the authoring tab remains online; public provider propagation can take several minutes, so clean readers retry public loads before giving up. Reply propagation on Pages is strongest when the copied URL includes the current `replies=` hints, because immutable index CIDs do not provide a forward pointer to later replies by themselves.
+This writes the serverless Pages build to `docs/` with a `/ipfschan/` base path. The Pages build runs the same P2P-first client and starts Helia's public browser IPFS networking instead of calling the Node WebRTC signaling or mirror endpoints. Fresh browser sharing first tries the public IPFS network, then falls back to CID-verified `records=` payloads embedded in the copied thread URL. Those records carry post text and attachment metadata, not attachment bytes, so images still depend on browser/public IPFS reachability. Pages has no live signaling helper, so an already-open tab needs a new shared URL to see replies posted after its current immutable index snapshot.
 
 Container build:
 
@@ -93,7 +93,7 @@ Deployment environment variables:
 ## Notes
 - Posts and attachments are added to the local Helia node so the author hosts their own content; the app indexes metadata in `data/index.json`.
 - Posts, attachments, and the thread index manifest are authored by browser Helia instead of the normal thread/reply Express API. Fresh browsers try local IndexedDB and, in the Pages build, the public IPFS browser network. Node-hosted builds can also use the app-level live peer path and CID-verified availability mirror.
-- Thread index CIDs are immutable snapshots. Newly posted replies publish a new index CID, add the reply CID to the current URL as a `replies=` hint, and advertise the thread root to live peers when the Node helper service is present.
+- Thread index CIDs are immutable snapshots. Newly posted replies publish a new index CID, add the reply CID to the current URL as a `replies=` hint, embed the current CID-verified thread records in `records=`, and advertise the thread root to live peers when the Node helper service is present.
 - API endpoints live under `/api` (see `src/server/routes.js`).
 - The server defaults to IPFS offline mode to avoid network interface issues in restricted environments. Set `IPFS_OFFLINE=false` to enable libp2p networking.
 - The current Helia 6 stack uses the native async-iterable filesystem blockstore contract.

@@ -35,6 +35,7 @@ Use headless validation first. Keep tests executable through `npm test` and avoi
   - Attachment DAG CID collection follows DAG-PB links and de-duplicates repeated block CIDs.
 - `src/client/__tests__/route-state.test.js`
   - Thread URL reply-hint parsing, merging, de-duplication, and serialization.
+  - Thread URL record bundle serialization, invalid payload handling, UI-derived field stripping, and attachment metadata round trips.
 - `src/client/__tests__/decentralized-board.test.js`
   - CID-verified peer thread record import.
   - Live-peer provider CID collection for both index CIDs and thread-root CIDs.
@@ -76,10 +77,11 @@ Use headless validation first. Keep tests executable through `npm test` and avoi
   - replying adds the new reply CID to `replies=<replyCid,...>`,
   - replying changes the index CID while preserving the thread root,
   - the thread link matches the current URL state,
-  - opening an older index URL plus the current `replies=` hint renders the hinted reply after the post block becomes reachable.
+  - opening an older index URL plus the current `replies=` hint renders the hinted reply after the post block becomes reachable,
+  - copied thread URLs include `records=` and a fresh profile can render those records after CID verification even if the public index CID is not reachable yet.
 - For load/post UX changes, confirm the modal appears during initial tag/thread loading and during posting, shows `i/j completed queries` or availability advertisement progress, and disappears only after the relevant operation completes or reports a warning.
 - For P2P sharing changes on the Node-hosted app, use two separate browser profiles. Profile A should create a P2P thread and show the thread index was updated and mirrored; profile B should open the copied URL with clean IndexedDB/localStorage and show `threads and tags ready from availability mirror` plus the thread content.
-- For GitHub Pages/serverless sharing changes, use two separate browser profiles against the Pages URL. Profile A should create a P2P thread and complete or warn on the public IPFS availability advertisement. Profile B should open the copied URL with clean IndexedDB/localStorage and either show `threads and tags ready from public IPFS` plus the thread content, or record the public reachability failure text if public provider announcement/gateway retrieval is still not sufficient.
+- For GitHub Pages/serverless sharing changes, use two separate browser profiles against the Pages URL. Profile A should create a P2P thread and complete or warn on the public IPFS availability advertisement. Profile B should open the copied URL with clean IndexedDB/localStorage and either show `threads and tags ready from public IPFS` or `threads and tags ready from verified URL records` plus the thread content. After profile B posts a reply, profile A should be able to open profile B's updated URL and see the reply from the embedded verified records. Do not expect old already-open Pages tabs to discover later replies without an updated URL or a separate relay/signaling layer.
 - For P2P attachment sharing changes, create a P2P thread with an attachment, load the copied index URL in a fresh profile, and verify image attachments render from browser/public IPFS when possible or `/api/p2p/file/<cid>` streams the mirrored bytes in Node-hosted mode.
 - For live peer changes, keep profile A open after creating the P2P thread. Profile B should load the copied URL with clean storage and show `threads and tags ready from live peer`.
 - For live peer reply changes on the Node-hosted app, keep profile A and profile B open on the same thread. Profile A should post a reply; profile B should either discover the reply through the updated shared `replies=` URL or pull the new thread post records from a live peer advertising the thread root.
@@ -92,6 +94,6 @@ Use headless validation first. Keep tests executable through `npm test` and avoi
 
 - Client-level tests for rendering nested thread payloads.
 - Automated client URL-routing tests.
-- Automated browser Helia tests for IndexedDB persistence, live-peer transfer, fresh-profile mirror fallback, P2P route reloads, reply-hint URL reloads, live-peer reply sync, and image attachment blob URL assertions.
+- Automated browser Helia tests for IndexedDB persistence, live-peer transfer, fresh-profile mirror fallback, P2P route reloads, reply-hint URL reloads, `records=` URL hydration, live-peer reply sync, and image attachment blob URL assertions.
 - Stress coverage for very large multi-block attachment transfer over the live peer channel.
 - Public deployment controls: auth, moderation, rate limiting, and backups.

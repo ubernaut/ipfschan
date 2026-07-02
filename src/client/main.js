@@ -2,6 +2,8 @@ import { decentralizedBoard } from './decentralized-board.js'
 import {
   mergeCidLists,
   parseCidList,
+  parseRecordList,
+  serializeRecordList,
   serializeCidList
 } from './route-state.js'
 
@@ -181,7 +183,8 @@ function readRoute() {
     replies: parseCidList([
       params.get('replies'),
       ...params.getAll('reply')
-    ])
+    ]),
+    records: parseRecordList(params.get('records'))
   }
 }
 
@@ -189,12 +192,14 @@ function routeUrl({
   board = state.boardCid,
   tag = state.currentTag,
   thread = state.currentThread,
-  replies = thread ? state.replyCids : []
+  replies = thread ? state.replyCids : [],
+  records = thread ? routeRecordsForThread(thread) : []
 } = {}) {
   const url = new URL(window.location.href)
   url.searchParams.delete('mode')
   url.searchParams.delete('board')
   url.searchParams.delete('reply')
+  url.searchParams.delete('record')
   if (board) {
     url.searchParams.set('index', board)
   } else {
@@ -220,19 +225,27 @@ function routeUrl({
     url.searchParams.delete('replies')
   }
 
+  const serializedRecords = thread ? serializeRecordList(records) : ''
+  if (serializedRecords) {
+    url.searchParams.set('records', serializedRecords)
+  } else {
+    url.searchParams.delete('records')
+  }
+
   return url
 }
 
 function threadUrl(
   rootCid = state.currentThread,
   tag = state.currentTag,
-  replies = rootCid === state.currentThread ? state.replyCids : []
+  replies = rootCid === state.currentThread ? state.replyCids : [],
+  records = routeRecordsForThread(rootCid)
 ) {
-  return routeUrl({ thread: rootCid, tag, replies })
+  return routeUrl({ thread: rootCid, tag, replies, records })
 }
 
 function indexUrl(boardCid = state.boardCid) {
-  return routeUrl({ board: boardCid, tag: null, thread: null, replies: [] })
+  return routeUrl({ board: boardCid, tag: null, thread: null, replies: [], records: [] })
 }
 
 function updateRoute(
@@ -240,13 +253,21 @@ function updateRoute(
     board = state.boardCid,
     tag = state.currentTag,
     thread = state.currentThread,
-    replies = thread ? state.replyCids : []
+    replies = thread ? state.replyCids : [],
+    records = thread ? routeRecordsForThread(thread) : []
   } = {},
   { replace = false } = {}
 ) {
-  const url = routeUrl({ board, tag, thread, replies })
+  const url = routeUrl({ board, tag, thread, replies, records })
   if (url.href === window.location.href) return
-  const statePayload = { mode: MODE_P2P, board, tag, thread, replies: parseCidList(replies) }
+  const statePayload = {
+    mode: MODE_P2P,
+    board,
+    tag,
+    thread,
+    replies: parseCidList(replies),
+    recordCids: records.map(record => record.cid).filter(Boolean)
+  }
   if (replace) {
     window.history.replaceState(statePayload, '', url)
   } else {
@@ -270,6 +291,7 @@ function boardReadyMessage() {
     mirror: ' from availability mirror',
     peer: ' from live peer',
     public: ' from public IPFS',
+    url: ' from verified URL records',
     local: ''
   }[decentralizedBoard.lastLoadSource] || ''
   return `threads and tags ready${source}: ${shortCid(state.boardCid)}`
@@ -440,6 +462,58 @@ async function importRouteReplies(replyCids, rootCid) {
   return { imported, failed }
 }
 
+function routeReplyCidsFromRecords(records, rootCid) {
+  if (!rootCid || !Array.isArray(records)) return []
+  return records
+    .filter(record => record?.cid && record.cid !== rootCid)
+    .filter(record => (record.threadRootCid || record.cid) === rootCid)
+    .map(record => record.cid)
+}
+
+function routeRecordsForThread(rootCid) {
+  if (!rootCid) return []
+  try {
+    return decentralizedBoard.threadRecords(rootCid)
+  } catch (err) {
+    return []
+  }
+}
+
+async function importRouteRecords(records, rootCid) {
+  if (!Array.isArray(records) || !records.length || !rootCid) {
+    return { imported: 0, failed: null }
+  }
+
+  try {
+    const imported = await decentralizedBoard.importThreadRecords(records, rootCid)
+    state.replyCids = mergeCidLists(
+      state.replyCids,
+      routeReplyCidsFromRecords(records, rootCid)
+    )
+    return { imported, failed: null }
+  } catch (err) {
+    return { imported: 0, failed: err }
+  }
+}
+
+async function loadFromRouteRecords(route) {
+  if (!route.thread || !route.records.length) {
+    throw new Error('Thread URL does not include verified records')
+  }
+
+  await decentralizedBoard.init()
+  const result = await importRouteRecords(route.records, route.thread)
+  if (result.failed) throw result.failed
+  decentralizedBoard.lastLoadSource = 'url'
+  if (route.board) {
+    decentralizedBoard.boardCid = route.board
+  }
+  state.boardCid = route.board || decentralizedBoard.boardCid
+  setP2PStatus(boardReadyMessage())
+  renderModeControls()
+  return result
+}
+
 function replyCidsForThread(rootCid) {
   return decentralizedBoard
     .getThreadTree(rootCid)
@@ -520,19 +594,43 @@ async function applyRoute({ replace = false } = {}) {
   const route = readRoute()
   state.mode = MODE_P2P
   state.boardCid = route.board
-  state.replyCids = route.thread ? route.replies : []
+  state.replyCids = route.thread
+    ? mergeCidLists(route.replies, routeReplyCidsFromRecords(route.records, route.thread))
+    : []
   renderModeControls()
 
+  let routeRecordImport = { imported: 0, failed: null }
+  let loadedFromRouteRecords = false
   try {
     await loadP2PBoard(route.board)
   } catch (err) {
-    state.tags = []
-    state.threads = []
-    clearThreadView('')
-    renderTags()
-    renderThreads()
-    setP2PStatus(err.message, 'error')
-    throw err
+    if (route.thread && route.records.length) {
+      try {
+        routeRecordImport = await loadFromRouteRecords(route)
+        loadedFromRouteRecords = true
+      } catch (routeErr) {
+        state.tags = []
+        state.threads = []
+        clearThreadView('')
+        renderTags()
+        renderThreads()
+        const message = `${err.message}; verified URL records also failed: ${routeErr.message}`
+        setP2PStatus(message, 'error')
+        throw new Error(message, { cause: routeErr })
+      }
+    } else {
+      state.tags = []
+      state.threads = []
+      clearThreadView('')
+      renderTags()
+      renderThreads()
+      setP2PStatus(err.message, 'error')
+      throw err
+    }
+  }
+
+  if (route.thread && route.records.length && !loadedFromRouteRecords) {
+    routeRecordImport = await importRouteRecords(route.records, route.thread)
   }
 
   let replyImport = { imported: 0, failed: [] }
@@ -554,15 +652,31 @@ async function applyRoute({ replace = false } = {}) {
   if (route.thread) {
     try {
       await openThread(route.thread, { updateUrl: false, tag: route.tag })
-      state.replyCids = mergeCidLists(state.replyCids, route.replies)
+      state.replyCids = mergeCidLists(
+        state.replyCids,
+        route.replies,
+        routeReplyCidsFromRecords(route.records, route.thread)
+      )
       if (replace) {
         updateRoute(
-          { board: state.boardCid, tag: route.tag, thread: route.thread, replies: state.replyCids },
+          {
+            board: state.boardCid,
+            tag: route.tag,
+            thread: route.thread,
+            replies: state.replyCids,
+            records: routeRecordsForThread(route.thread)
+          },
           { replace: true }
         )
       }
-      if (replyImport.failed.length) {
+      if (routeRecordImport.failed) {
+        setStatus(`verified URL records failed: ${routeRecordImport.failed.message}`, 'error')
+      } else if (replyImport.failed.length) {
         setStatus(`${replyImport.failed.length} reply hint(s) not reachable yet`, 'error')
+      } else if (loadedFromRouteRecords) {
+        setStatus(`loaded ${routeRecordsForThread(route.thread).length} verified URL record(s)`)
+      } else if (routeRecordImport.imported) {
+        setStatus(`loaded ${routeRecordImport.imported} verified URL record(s)`)
       } else if (replyImport.imported) {
         setStatus(`loaded ${replyImport.imported} reply hint(s)`)
       }

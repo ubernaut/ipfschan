@@ -1232,3 +1232,67 @@ Open questions and caveats:
 
 - Node-hosted/VPN reply sync now tests cleanly with two fresh browser profiles and no meaningful console output.
 - GitHub Pages still depends on public IPFS provider propagation and browser libp2p dialing. In the captured run, public IPFS reachability failed before replies could be tested, so the Pages no-helper path is not reliable enough for live reply discovery.
+
+## 2026-07-02 11:59:31 AKDT
+
+Prompt: "ok push and test on github pages once it refreshes. I can't seem to see replies from other people only my own"
+
+Actions attempted:
+
+- Reviewed the prompt-provided AGENTS instructions, `plan/plan.md`, and the recent `plan/log.md` entries before making changes.
+- Confirmed Node was still `v24.17.0` and the branch was clean on `main`.
+- Pushed the existing clean commit `e1cc9a7` to `origin/main` and waited until GitHub Pages served its asset `assets/index-_1_8Ctsd.js`.
+- Ran a two-profile fresh Chrome GitHub Pages probe against the refreshed live site with CDP console/runtime/log/stderr capture.
+- Reproduced the Pages failure before the reply stage: profile A created a thread, but profile B could not load profile A's initial thread index from public IPFS and timed out with `Thread index CID is not reachable through public IPFS: Thread and tag blocks are not reachable from public IPFS yet`.
+- Observed that the failed Pages run produced hundreds of public libp2p/WebRTC console and stderr messages, primarily `wss://...libp2p.direct` WebSocket failures, `Send failed INVALID_STATE`, and `DcSctpTransport...WRONG_SEQUENCE`.
+- Removed the leftover temp Chrome profile directories from the failed Pages probe.
+- Added a `records=` route payload that serializes the current thread's post records as base64url JSON while keeping attachment bytes out of the URL.
+- Kept URL records untrusted: route hydration imports them through `decentralizedBoard.importThreadRecords`, which re-adds each payload through Helia, compares the computed CID to the claimed CID, validates the requested thread root, and rolls back a failed batch.
+- Updated route loading so GitHub Pages can fall back to verified URL records when the public thread index CID is not reachable, then render tags, thread cards, and posts from those verified records.
+- Kept existing `replies=` CID hints for backward compatibility and for explicit reply CID dependencies in shared links.
+- Updated README, `plan/plan.md`, and `plan/tests.md` to document the Pages URL-record fallback and the remaining limitation that old already-open Pages tabs still need an updated URL or a real relay/signaling layer to discover later replies.
+
+Files touched:
+
+- `README.md`
+- `docs/index.html`
+- `docs/assets/*`
+- `plan/plan.md`
+- `plan/tests.md`
+- `plan/log.md`
+- `src/client/__tests__/route-state.test.js`
+- `src/client/main.js`
+- `src/client/route-state.js`
+
+Commands run and results:
+
+- `date '+%Y-%m-%d %H:%M:%S %Z'`: recorded `2026-07-02 11:59:31 AKDT` for the prompt and `2026-07-02 12:11:55 AKDT` during resume checks.
+- `sed -n '1,220p' /home/cos/.codex/skills/icc/SKILL.md`: reviewed ICC instructions.
+- `sed -n '1,220p' plan/plan.md` and `tail -n 120 plan/log.md`: reviewed plan/log context.
+- `pwd && node -v && git status --short --branch`: confirmed `/home/cos/projects/ipfschan`, Node `v24.17.0`, and a clean branch.
+- `git push origin main`: pushed `1cf6ec8..e1cc9a7` to `main`.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan && EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed ICC to `e1cc9a73027ba7c882e392fbf8ca368a72403716` after the push.
+- GitHub Pages asset polling with `curl`: live Pages switched from `assets/index-CaXcuInx.js` to `assets/index-_1_8Ctsd.js` on the second attempt.
+- Live GitHub Pages two-profile Chrome probe before the fix: failed at profile B's initial load because the public IPFS thread index was not reachable; the probe captured 914 important console/log/stderr entries.
+- `ps -eo pid,ppid,cmd | rg 'ipfschan-gpages-reply|remote-debugging-port=938|google-chrome --headless|node --input-type=module' || true`: found no remaining probe processes after the failed run.
+- `rm -rf /tmp/ipfschan-gpages-reply-b-H7fH7w /tmp/ipfschan-gpages-reply-a-X0j648`: removed leftover temp profiles.
+- `node --check src/client/route-state.js` and `node --check src/client/main.js`: passed after the route-record changes.
+- `npm test -- --run src/client/__tests__/route-state.test.js src/client/__tests__/decentralized-board.test.js`: passed with 2 files and 12 tests.
+- `npm test`: passed with 7 files and 33 tests.
+- `npm run build`: passed; final normal build asset included `dist/assets/index-TKOpsISP.js`. Vite still warned about the large Helia/libp2p chunk.
+- `npm run build:pages`: passed; final Pages build asset included `docs/assets/index-BojOaFYz.js`. Vite still warned about the large Helia/libp2p chunk.
+- `npm run smoke`: passed at `http://127.0.0.1:36151`.
+- `git diff --check`: passed.
+- `EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py index --repo ipfschan && EMSDK_QUIET=1 python3 /home/cos/projects/infinite_context_coder/scripts/codebase_tool.py build-memory --repo ipfschan`: refreshed ICC with the current worktree; 100 files were indexed and 220 memory chunks were built. ICC still reported git head `e1cc9a73027ba7c882e392fbf8ca368a72403716` because the current slice had not been committed yet.
+
+Failures and pivots:
+
+- The live Pages failure was not a reply-only bug: profile B could not fetch the root thread index CID from public IPFS even while profile A was open and had reported provider advertisement completion.
+- Because GitHub Pages has no app-owned signaling or mirror endpoint, bare CIDs are not reliable enough for freshly authored static-site sharing. The fix moved copied thread links to carry CID-verified post records as a static fallback.
+
+Open questions and caveats:
+
+- The URL-record fallback makes updated shared links render text posts and replies on Pages even when public IPFS discovery is slow or failing.
+- Attachment bytes are not embedded in URLs, so images still depend on browser Helia, public IPFS reachability, live peers, or the Node-hosted mirror where available.
+- Already-open GitHub Pages tabs still do not get live reply discovery without an updated URL or a future public relay/signaling/pinning layer.
+- A live GitHub Pages retest of the new `records=` bundle is pending after committing, pushing, and waiting for Pages to refresh to `assets/index-BojOaFYz.js`.
